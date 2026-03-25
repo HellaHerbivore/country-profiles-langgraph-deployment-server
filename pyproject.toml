@@ -1,30 +1,44 @@
 [project]
 name = "deploy-langgraph-server-auth"
 version = "0.1.0"
-description = "Add your description here"
+description = "Web server and security lock for the Country Profiles AI research agent."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    # --- Web Server & Security Tools (New) ---
     "colorama>=0.4.6",
     "google-api-python-client>=2.171.0",
-    "langchain-core>=0.3.63",
     "langchain-mcp-adapters>=0.1.7",
-    "langchain-openai>=0.3.19",
-    "langgraph>=0.4.8",
     "mcp>=1.9.3",
     "psycopg2-binary>=2.9.10",
     "pydantic>=2.11.5",
     "python-dotenv>=1.1.0",
     "sqlalchemy>=2.0.41",
-    # Proxy server dependencies
     "httpx>=0.25.0",
     "uvicorn>=0.24.0",
     "starlette>=0.28.0",
+
+    # --- Your Country Profiles Brain Tools ---
+    "langgraph>=0.4.8",
+    "langgraph-prebuilt",
+    "langgraph-sdk",
+    "langgraph-checkpoint-sqlite",
+    "langsmith",
+    "langchain-core>=0.3.63",
+    "langchain-community",
+    "langchain-openai>=0.3.19",
+    "langchain-openrouter",
+    "langchain-google-genai",
+    "google-generativeai",
+    "google-genai",
+    "langchain-tavily",
+    "wikipedia",
+    "trustcall",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
     "langgraph-api>=0.2.48",
-    "langgraph-cli>=0.3.1",
+    "langgraph-cli[inmem]>=0.3.1",
 ]

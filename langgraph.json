@@ -1,7 +1,8 @@
 {
     "dependencies": ["."],
     "graphs": {
-      "rocket": "./src/rocket/graph.py:graph"
+      "research_assistant": "./research_assistant.py:graph",
+      "internal_researcher": "./internal_researcher.py:graph"
     },
     "env": ".env",
     "python_version": "3.13",

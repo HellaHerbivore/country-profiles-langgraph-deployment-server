@@ -1,20 +1,62 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+# --- SECRETS & KEYS ---
+.env
+.env.local
+.env.*.local
 
-# Virtual environments
+# --- VIRTUAL ENVIRONMENTS ---
 .venv
+venv/
+env/
+lc-academy-env/
+bin/
+Include/
+Lib/
+Scripts/
+pyvenv.cfg
 uv.lock
 
-# macOS
+# --- LANGGRAPH TOOLS ---
+.langgraph_api/
+.langgraph_ops.pckl
+.langgraph_retry_counter.pckl
+
+# --- PYTHON JUNK ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+wheels/
+
+# --- EDITOR & OS SETTINGS ---
+.vscode/
+.idea/
+.DS_Store
 *.DS_Store
+Thumbs.db
+desktop.ini
 
-# env
-.env
+# --- NOTEBOOKS ---
+.ipynb_checkpoints/
 
-# langgraph api
-.langgraph_api
+# --- COUNTRY PROFILES SPECIFIC ---
+# Data and output files
+data/
+reports/
+
+# Open Paws Tools
+.desloppify/
+AGENTS.md
+
+# Docker config
+.dockerignore

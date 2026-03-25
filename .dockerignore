@@ -8,30 +8,18 @@ __pycache__
 *.pyo
 *.pyd
 .Python
-env
 pip-log.txt
 pip-delete-this-directory.txt
 .tox
-.coverage
-.coverage.*
 .cache
-nosetests.xml
-coverage.xml
-*.cover
 *.log
-.git
-.mypy_cache
-.pytest_cache
-.hypothesis
 
-# Virtual environments
+# Virtual environments & Secrets
 .env
 .venv
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
 # IDEs
 .vscode/
@@ -44,21 +32,19 @@ venv.bak/
 .DS_Store
 .DS_Store?
 ._*
-.Spotlight-V100
 .Trashes
-ehthumbs.db
 Thumbs.db
 
-# Project specific
-*.log
+# Project specific (Country Profiles)
+reports/
+reports*
+.langgraph_api
+__pycache__reports/
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Don't ignore the .env file since we need it for the container
-!.env
-
-# Node modules (if any)
+# Node modules
 node_modules/
 npm-debug.log*
 

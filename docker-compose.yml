@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rocket-server
+    container_name: country-profiles-server
     ports:
       - "8000:8000"  # Map container port 8000 to host port 8000
     env_file:
