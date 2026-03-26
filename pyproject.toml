@@ -29,8 +29,6 @@ dependencies = [
     "langchain-openai>=0.3.19",
     "langchain-openrouter",
     "langchain-google-genai",
-    "google-generativeai",
-    "google-genai",
     "langchain-tavily",
     "wikipedia",
     "trustcall",

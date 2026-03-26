@@ -1,7 +1,6 @@
 import os
 import re
 import operator
-from datetime import datetime
 from dotenv import load_dotenv
 from typing import Annotated, List, cast
 from typing_extensions import TypedDict
@@ -31,9 +30,6 @@ llm = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", api_key=google_api_
 
 # The reader tool for digging through your files
 gemini_client = genai.Client(api_key=google_api_key)
-
-# Output directory — absolute path so it always hits the Docker volume mount
-REPORTS_DIR = "/app/reports"
 
 # Two Internal Vaults
 DESKTOP_STORE = "fileSearchStores/research-assistant-vault-7ya8m561y6pn"
@@ -272,12 +268,6 @@ def initiate_all_interviews(state: ResearchGraphState):
         )]
     }) for analyst in state["analysts"]]
 
-    # 2. Return a Command object that updates messages AND triggers the interviews
-    # This "seeds" the thread so LangGraph Studio shows the messages in the chat window.
-    return Command(
-        update={"messages": [HumanMessage(content=f"Researching topic: {topic}")]},
-        goto=interviews
-    )
 
 def collect_sections(state: ResearchGraphState):
     """Join point — waits for all parallel interviews to complete before checking knowledge."""
@@ -308,24 +298,8 @@ def check_knowledge(state: ResearchGraphState):
     return "write_report"
 
 def abort_report(state: ResearchGraphState):
-    topic = state["topic"]
     final_message = "not enough internal knowledge"
-    
-    folder_name = REPORTS_DIR
-    os.makedirs(folder_name, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    safe_topic = "".join([c if c.isalnum() else "_" for c in topic])
-    
-    filename = f"{timestamp}_{safe_topic}_Aborted.md"
-    full_path = os.path.join(folder_name, filename)
-    
-    try:
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(final_message)
-        print(f"\n⚠️ ABORTED: Not enough internal knowledge. Log saved as {filename}\n")
-    except Exception as e:
-        print(f"\n❌ Error saving file: {e}\n")
-        
+    print("\n⚠️ ABORTED: Not enough internal knowledge.\n")
     return {"final_report": final_message}
 
 report_writer_instructions = """You are a Lead Strategist. Synthesize the expert memos into a briefing for: {topic}.
@@ -607,21 +581,6 @@ def restructure_report(state: ResearchGraphState):
         content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
     else:
         content = str(content)
-
-    # Save the structured version alongside the original
-    folder_name = REPORTS_DIR
-    os.makedirs(folder_name, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    safe_topic = "".join([c if c.isalnum() else "_" for c in topic])
-    filename = f"{timestamp}_{safe_topic}_Structured_Profile.md"
-    full_path = os.path.join(folder_name, filename)
-
-    try:
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"\n📊 Structured report saved as {filename}\n")
-    except Exception as e:
-        print(f"\n❌ Error saving structured report: {e}\n")
 
     return Command(
         update={
