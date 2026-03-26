@@ -25,11 +25,16 @@ class LangGraphServerManager:
     def __init__(self, config: ServerConfig):
         self.config = config
         self.process: Optional[asyncio.subprocess.Process] = None
-    
+        self.grpc_process: Optional[asyncio.subprocess.Process] = None
+
     async def start_server(self) -> bool:
         """
         Start the internal LangGraph server.
-        
+
+        Starts the gRPC sidecar (core-api-grpc) first, then the uvicorn server.
+        The base image's entrypoint normally handles this, but since we use a
+        custom entrypoint (server_proxy.py), we must start it ourselves.
+
         Returns:
             bool: True if server started successfully, False otherwise
         """
@@ -40,11 +45,28 @@ class LangGraphServerManager:
         env["PORT"] = str(self.config.langgraph_internal_port)
         env["HOST"] = "127.0.0.1"  # Only bind to localhost for security
 
+        # Start the gRPC sidecar first (required by LangGraph API server)
+        try:
+            logger.info("Starting core-api-grpc sidecar...")
+            self.grpc_process = await asyncio.create_subprocess_exec(
+                "core-api-grpc", "-service", "core-api",
+                env=env,
+                stdout=None,
+                stderr=None
+            )
+            logger.info(f"core-api-grpc started with PID {self.grpc_process.pid}")
+            # Give gRPC server a moment to initialize
+            await asyncio.sleep(2)
+        except FileNotFoundError:
+            logger.warning("core-api-grpc not found, skipping gRPC sidecar")
+        except Exception as e:
+            logger.warning(f"Failed to start core-api-grpc: {e}")
+
         # Use the correct command for LangGraph API server
         cmd = [
-            "uvicorn", 
-            "langgraph_api.server:app", 
-            "--host", "127.0.0.1", 
+            "uvicorn",
+            "langgraph_api.server:app",
+            "--host", "127.0.0.1",
             "--port", str(self.config.langgraph_internal_port)
         ]
 
@@ -118,7 +140,7 @@ class LangGraphServerManager:
             return False
     
     async def stop_server(self) -> None:
-        """Stop the LangGraph server if it was started by this manager."""
+        """Stop the LangGraph server and gRPC sidecar if started by this manager."""
         if self.process:
             logger.info("Shutting down LangGraph server...")
             try:
@@ -133,6 +155,20 @@ class LangGraphServerManager:
                 logger.warning(f"Error shutting down LangGraph server: {e}")
             finally:
                 self.process = None
+
+        if self.grpc_process:
+            logger.info("Shutting down core-api-grpc sidecar...")
+            try:
+                self.grpc_process.terminate()
+                await asyncio.wait_for(self.grpc_process.wait(), timeout=5.0)
+                logger.info("core-api-grpc shut down successfully")
+            except asyncio.TimeoutError:
+                self.grpc_process.kill()
+                await self.grpc_process.wait()
+            except Exception as e:
+                logger.warning(f"Error shutting down core-api-grpc: {e}")
+            finally:
+                self.grpc_process = None
     
     def get_status(self) -> dict:
         """
