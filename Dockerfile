@@ -14,7 +14,7 @@ RUN PYTHONDONTWRITEBYTECODE=1 uv pip install --system --no-cache-dir -c /api/con
 # -- End of local dependencies install --
 
 # Point the wrapper to the Country Profiles agent
-ENV LANGSERVE_GRAPHS='{"country_profiles": "/deps/deploy-langgraph-server-auth/src/country_profiles/main.py:graph"}'
+ENV LANGSERVE_GRAPHS='{"country_profiles": "/deps/deploy-langgraph-server-auth/src/country_profiles/internal_researcher.py:graph"}'
 
 ENV PYTHONPATH="/deps/deploy-langgraph-server-auth:/api"
 

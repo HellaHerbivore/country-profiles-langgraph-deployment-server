@@ -53,8 +53,8 @@ class LangGraphServerManager:
             self.process = await asyncio.create_subprocess_exec(
                 *cmd,
                 env=env,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stdout=None,
+                stderr=None
             )
 
             # Give it a moment to start
