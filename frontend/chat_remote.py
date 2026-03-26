@@ -22,16 +22,18 @@ async def main():
         parser = SSEParser()
 
         user_input = "Briefly introduce yourself and offer to help me."
+        # ...
         while True:
-            print(f"\n ---- 🚀 Rocket ---- \n")
+            print(f"\n ---- 🔎 India Researcher ---- \n") # (Optional) Give it a new name tag
             async for result in run_stream_from_message(
                 thread_id=thread_id,
-                assistant_id="rocket",
+                assistant_id="internal_researcher",
                 message=user_input,
                 configurable=configurable,
                 parser=parser
                 ):
                 print(Fore.CYAN + result + Style.RESET_ALL, end="", flush=True)
+        # ...
 
             user_input = input("\n\nUser ('exit' to quit): ")
             if user_input.lower() in ["exit", "quit"]:

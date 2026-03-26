@@ -86,9 +86,16 @@ analyst_instructions="""You are tasked with creating a set of AI analyst persona
 2. Pick the top {max_analysts} themes.
 3. Assign one analyst to each theme."""
 
-def create_analysts(state: GenerateAnalystsState):
-    topic = state['topic']
-    max_analysts = state['max_analysts']
+def create_analysts(state: ResearchGraphState):
+    # 1. Grab the topic safely, or use the last chat message
+    topic = state.get('topic')
+    if not topic and state.get('messages'):
+        topic = state['messages'][-1].content
+        
+    # 2. Grab the max number of analysts safely, or default to 3
+    max_analysts = state.get('max_analysts')
+    if not max_analysts:
+        max_analysts = 3
         
     structured_llm = llm.with_structured_output(Perspectives)
     system_message = analyst_instructions.format(
@@ -97,10 +104,15 @@ def create_analysts(state: GenerateAnalystsState):
     )
 
     raw_res = structured_llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Generate the set of analysts.")])
-
     perspectives_res = cast(Perspectives, raw_res)
 
-    return {"analysts": perspectives_res.analysts}
+    # CRITICAL: We return the topic and max_analysts here so 
+    # the rest of the graph can find them in the state!
+    return {
+        "analysts": perspectives_res.analysts,
+        "topic": topic,
+        "max_analysts": max_analysts
+    }
 
 question_instructions = """You are an analyst tasked with interviewing an expert to learn about a specific topic. 
 Begin by introducing yourself using a name that fits your persona, and then ask your question.
