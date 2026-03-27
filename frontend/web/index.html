@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Country Profiles Researcher</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f0;
+            color: #2d2d2d;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 0.3rem;
+        }
+
+        header p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 0.4rem;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 0.7rem 0.9rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4a7c59;
+        }
+
+        .analyst-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        input[type="number"] {
+            width: 70px;
+            padding: 0.7rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            text-align: center;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #4a7c59;
+        }
+
+        .analyst-hint {
+            color: #888;
+            font-size: 0.82rem;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.8rem;
+            background: #4a7c59;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 0.5rem;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #3d6a4b;
+        }
+
+        .btn:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+
+        /* Progress section */
+        #progress-section {
+            display: none;
+            margin-bottom: 1.5rem;
+        }
+
+        .progress-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .progress-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ddd;
+            border-top-color: #4a7c59;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #progress-log {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 0.8rem;
+            color: #555;
+            max-height: 200px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            padding: 0.15rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        /* Report section */
+        #report-section {
+            display: none;
+        }
+
+        .report-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        #report-content {
+            line-height: 1.7;
+            font-size: 0.95rem;
+        }
+
+        #report-content h1, #report-content h2, #report-content h3,
+        #report-content h4, #report-content h5 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #1a1a1a;
+        }
+
+        #report-content h1 { font-size: 1.4rem; }
+        #report-content h2 { font-size: 1.2rem; }
+        #report-content h3 { font-size: 1.05rem; }
+
+        #report-content p {
+            margin-bottom: 0.8rem;
+        }
+
+        #report-content ul, #report-content ol {
+            margin: 0.5rem 0 0.8rem 1.5rem;
+        }
+
+        #report-content li {
+            margin-bottom: 0.3rem;
+        }
+
+        #report-content strong {
+            color: #1a1a1a;
+        }
+
+        #report-content hr {
+            border: none;
+            border-top: 1px solid #e0e0e0;
+            margin: 1.5rem 0;
+        }
+
+        #report-content blockquote {
+            border-left: 3px solid #4a7c59;
+            padding-left: 1rem;
+            margin: 0.8rem 0;
+            color: #555;
+        }
+
+        /* Error */
+        .error-msg {
+            background: #fef2f2;
+            color: #b91c1c;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        /* New research button */
+        .btn-secondary {
+            background: transparent;
+            color: #4a7c59;
+            border: 2px solid #4a7c59;
+            margin-top: 1.5rem;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #f0f7f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Country Profiles Researcher</h1>
+            <p>Strategic analysis of animal advocacy issues</p>
+        </header>
+
+        <div id="error-msg" class="error-msg"></div>
+
+        <div id="form-section" class="form-card">
+            <div class="form-group">
+                <label for="topic">Research Topic</label>
+                <input type="text" id="topic" placeholder="e.g. Animal advocacy in Tamil Nadu" />
+            </div>
+            <div class="form-group">
+                <label for="max-analysts">Number of Analysts</label>
+                <div class="analyst-row">
+                    <input type="number" id="max-analysts" value="3" min="1" max="6" />
+                    <span class="analyst-hint">Each analyst explores a different theme (1-6)</span>
+                </div>
+            </div>
+            <button class="btn" id="generate-btn" onclick="startResearch()">Generate Report</button>
+        </div>
+
+        <div id="progress-section">
+            <div class="progress-card">
+                <div class="progress-title">
+                    <span class="spinner" id="spinner"></span>
+                    <span id="progress-status">Starting research...</span>
+                </div>
+                <div id="progress-log"></div>
+            </div>
+        </div>
+
+        <div id="report-section">
+            <div class="report-card">
+                <div id="report-content"></div>
+                <button class="btn btn-secondary" onclick="resetForm()">New Research</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // =========================================================================
+    // CONFIGURATION — Update these for your deployment
+    // =========================================================================
+    const CONFIG = {
+        // Your LangGraph server URL (Render backend or local Docker)
+        SERVER_URL: "http://localhost:8000",
+        // API key for authentication (leave empty if auth is disabled)
+        API_KEY: "",
+        // Assistant ID from LANGSERVE_GRAPHS in Dockerfile
+        ASSISTANT_ID: "country_profiles"
+    };
+
+    // =========================================================================
+    // UI helpers
+    // =========================================================================
+    function show(id) { document.getElementById(id).style.display = "block"; }
+    function hide(id) { document.getElementById(id).style.display = "none"; }
+
+    function showError(msg) {
+        const el = document.getElementById("error-msg");
+        el.textContent = msg;
+        show("error-msg");
+    }
+
+    function hideError() { hide("error-msg"); }
+
+    function addLog(text) {
+        const log = document.getElementById("progress-log");
+        const entry = document.createElement("div");
+        entry.className = "log-entry";
+        entry.textContent = text;
+        log.appendChild(entry);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function setStatus(text) {
+        document.getElementById("progress-status").textContent = text;
+    }
+
+    function resetForm() {
+        hide("report-section");
+        hide("progress-section");
+        show("form-section");
+        document.getElementById("progress-log").innerHTML = "";
+        document.getElementById("report-content").innerHTML = "";
+        document.getElementById("generate-btn").disabled = false;
+        document.getElementById("topic").value = "";
+    }
+
+    // =========================================================================
+    // Markdown to HTML (minimal, no dependencies)
+    // =========================================================================
+    function markdownToHtml(md) {
+        let html = md
+            // Headers
+            .replace(/^##### (.+)$/gm, "<h5>$1</h5>")
+            .replace(/^#### (.+)$/gm, "<h4>$1</h4>")
+            .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+            .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+            .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+            // Horizontal rules
+            .replace(/^---$/gm, "<hr>")
+            .replace(/^\*\*\*$/gm, "<hr>")
+            // Bold and italic
+            .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+            .replace(/\*(.+?)\*/g, "<em>$1</em>")
+            // Blockquotes
+            .replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
+            // Unordered lists
+            .replace(/^[\-\*] (.+)$/gm, "<li>$1</li>")
+            // Ordered lists
+            .replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
+
+        // Wrap consecutive <li> in <ul>
+        html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
+
+        // Paragraphs: wrap lines that aren't already wrapped in tags
+        html = html.split("\n").map(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return "";
+            if (/^<(h[1-5]|ul|ol|li|hr|blockquote|p)/.test(trimmed)) return trimmed;
+            return `<p>${trimmed}</p>`;
+        }).join("\n");
+
+        // Clean up empty paragraphs
+        html = html.replace(/<p><\/p>/g, "");
+
+        return html;
+    }
+
+    // =========================================================================
+    // API headers
+    // =========================================================================
+    function getHeaders() {
+        const h = { "Content-Type": "application/json" };
+        if (CONFIG.API_KEY) h["x-api-key"] = CONFIG.API_KEY;
+        return h;
+    }
+
+    // =========================================================================
+    // Create a thread
+    // =========================================================================
+    async function createThread() {
+        const threadId = crypto.randomUUID();
+        const resp = await fetch(`${CONFIG.SERVER_URL}/threads`, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify({
+                thread_id: threadId,
+                metadata: { user_id: "web-user" },
+                if_exists: "do_nothing"
+            })
+        });
+        if (!resp.ok) {
+            const text = await resp.text();
+            throw new Error(`Failed to create thread (${resp.status}): ${text}`);
+        }
+        const data = await resp.json();
+        return data.thread_id;
+    }
+
+    // =========================================================================
+    // SSE parser (mirrors frontend/api/agent_server.py SSEParser)
+    // =========================================================================
+    class SSEParser {
+        constructor() {
+            this.buffer = "";
+            this.seenMessageIds = new Set();
+        }
+
+        parseChunk(text) {
+            this.buffer += text;
+            const results = [];
+
+            while (this.buffer.includes("\r\n\r\n")) {
+                const idx = this.buffer.indexOf("\r\n\r\n");
+                const eventData = this.buffer.slice(0, idx);
+                this.buffer = this.buffer.slice(idx + 4);
+                const result = this.parseEvent(eventData);
+                if (result) results.push(result);
+            }
+            // Also try \n\n as delimiter (some servers use this)
+            while (this.buffer.includes("\n\n")) {
+                const idx = this.buffer.indexOf("\n\n");
+                const eventData = this.buffer.slice(0, idx);
+                this.buffer = this.buffer.slice(idx + 2);
+                const result = this.parseEvent(eventData);
+                if (result) results.push(result);
+            }
+
+            return results;
+        }
+
+        parseEvent(eventData) {
+            const lines = eventData.trim().split("\n");
+            let eventType = null;
+            let data = null;
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith("event:")) eventType = trimmed.slice(6).trim();
+                else if (trimmed.startsWith("data:")) data = trimmed.slice(5).trim();
+            }
+
+            if (!eventType || !data) return null;
+            return this.processEvent(eventType, data);
+        }
+
+        processEvent(eventType, data) {
+            if (eventType === "error") {
+                return { type: "error", text: data };
+            }
+            if (eventType === "metadata") return null;
+
+            if (eventType === "messages") {
+                try {
+                    const parsed = JSON.parse(data);
+                    let message;
+                    if (Array.isArray(parsed) && parsed.length === 2) {
+                        message = parsed[0];
+                    } else if (typeof parsed === "object" && !Array.isArray(parsed)) {
+                        message = parsed;
+                    }
+                    if (message) return this.processMessage(message);
+                } catch (e) {
+                    // skip malformed JSON
+                }
+            }
+            return null;
+        }
+
+        processMessage(message) {
+            const msgType = message.type;
+
+            if (msgType === "tool") {
+                const msgId = message.id;
+                if (msgId && this.seenMessageIds.has(msgId)) return null;
+                if (msgId) this.seenMessageIds.add(msgId);
+                return { type: "tool", name: message.name || "Unknown" };
+            }
+
+            if (msgType === "AIMessageChunk") {
+                const content = message.content || "";
+                if (content) return { type: "content", text: content };
+
+                if (message.tool_calls && message.tool_calls.length > 0) {
+                    const tc = message.tool_calls[0];
+                    if (tc.name) return { type: "tool_start", name: tc.name };
+                }
+            }
+
+            return null;
+        }
+    }
+
+    // =========================================================================
+    // Stream the research run
+    // =========================================================================
+    async function streamResearch(threadId, topic, maxAnalysts) {
+        const resp = await fetch(`${CONFIG.SERVER_URL}/threads/${threadId}/runs/stream`, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify({
+                assistant_id: CONFIG.ASSISTANT_ID,
+                input: {
+                    topic: topic,
+                    max_analysts: maxAnalysts
+                },
+                config: {
+                    recursion_limit: 100
+                },
+                stream_mode: "messages-tuple",
+                stream_subgraphs: false
+            })
+        });
+
+        if (!resp.ok) {
+            const text = await resp.text();
+            throw new Error(`Stream request failed (${resp.status}): ${text}`);
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        const parser = new SSEParser();
+
+        let fullContent = "";
+        let lastReportContent = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const events = parser.parseChunk(chunk);
+
+            for (const event of events) {
+                if (event.type === "error") {
+                    addLog("Error: " + event.text);
+                } else if (event.type === "tool_start") {
+                    addLog("Using tool: " + event.name);
+                } else if (event.type === "tool") {
+                    addLog("Tool complete: " + event.name);
+                } else if (event.type === "content") {
+                    fullContent += event.text;
+
+                    // Detect phase transitions from the AI messages
+                    if (event.text.includes("Report Finalized")) {
+                        setStatus("Report finalized, restructuring...");
+                        addLog("Report finalized");
+                    } else if (event.text.includes("Structured Profile Complete")) {
+                        setStatus("Structured profile complete!");
+                        addLog("Structured profile generated");
+                    } else if (event.text.includes("ABORTED")) {
+                        setStatus("Research aborted - not enough data");
+                        addLog("Aborted: not enough internal knowledge");
+                    }
+
+                    // Keep track of the latest substantial content block
+                    // The final messages contain the full report
+                    lastReportContent = fullContent;
+                }
+            }
+        }
+
+        return lastReportContent;
+    }
+
+    // =========================================================================
+    // Extract the best report from the streamed content
+    // =========================================================================
+    function extractReport(fullContent) {
+        // The graph sends two key messages:
+        // 1. "### Report Finalized\n\n{report}"
+        // 2. "### Structured Profile Complete\n\n{structured_report}"
+        // We want the structured report if available, otherwise the finalized report
+
+        const structuredMarker = "### 📊 Structured Profile Complete";
+        const finalizedMarker = "### ✅ Report Finalized";
+
+        let report = "";
+
+        const structuredIdx = fullContent.lastIndexOf(structuredMarker);
+        if (structuredIdx !== -1) {
+            report = fullContent.slice(structuredIdx + structuredMarker.length).trim();
+        } else {
+            const finalizedIdx = fullContent.lastIndexOf(finalizedMarker);
+            if (finalizedIdx !== -1) {
+                report = fullContent.slice(finalizedIdx + finalizedMarker.length).trim();
+            }
+        }
+
+        // If we couldn't find markers, use the full content as fallback
+        if (!report && fullContent.length > 100) {
+            report = fullContent;
+        }
+
+        return report;
+    }
+
+    // =========================================================================
+    // Main flow
+    // =========================================================================
+    async function startResearch() {
+        hideError();
+
+        const topic = document.getElementById("topic").value.trim();
+        const maxAnalysts = parseInt(document.getElementById("max-analysts").value, 10);
+
+        if (!topic) {
+            showError("Please enter a research topic.");
+            return;
+        }
+        if (isNaN(maxAnalysts) || maxAnalysts < 1 || maxAnalysts > 6) {
+            showError("Number of analysts must be between 1 and 6.");
+            return;
+        }
+
+        document.getElementById("generate-btn").disabled = true;
+        hide("form-section");
+        show("progress-section");
+        setStatus("Creating research thread...");
+        addLog("Topic: " + topic);
+        addLog("Analysts: " + maxAnalysts);
+
+        try {
+            const threadId = await createThread();
+            addLog("Thread created: " + threadId.slice(0, 8) + "...");
+            setStatus("Running research pipeline...");
+
+            const fullContent = await streamResearch(threadId, topic, maxAnalysts);
+
+            // Extract and display the report
+            const report = extractReport(fullContent);
+            if (report) {
+                document.getElementById("report-content").innerHTML = markdownToHtml(report);
+                hide("progress-section");
+                show("report-section");
+            } else {
+                setStatus("Research complete (no report generated)");
+                document.getElementById("spinner").style.display = "none";
+                addLog("No report content received. The internal vaults may not have enough data on this topic.");
+            }
+
+        } catch (err) {
+            console.error(err);
+            setStatus("Error occurred");
+            document.getElementById("spinner").style.display = "none";
+            showError(err.message);
+            show("form-section");
+            document.getElementById("generate-btn").disabled = false;
+        }
+    }
+    </script>
+</body>
+</html>
