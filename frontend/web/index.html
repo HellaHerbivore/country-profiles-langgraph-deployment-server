@@ -505,7 +505,14 @@
             }
 
             if (msgType === "AIMessageChunk") {
-                const content = message.content || "";
+                let content = message.content || "";
+                // Gemini/Google models return content as an array of blocks
+                // e.g. [{type: "text", text: "..."}] instead of a plain string
+                if (Array.isArray(content)) {
+                    content = content.map(block =>
+                        typeof block === "string" ? block : (block.text || "")
+                    ).join("");
+                }
                 if (content) return { type: "content", text: content };
 
                 if (message.tool_calls && message.tool_calls.length > 0) {
