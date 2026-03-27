@@ -20,6 +20,7 @@ services:
     environment:
       - PYTHONPATH=/deps/deploy-langgraph-server-auth
       - LANGGRAPH_DATABASE_URI=sqlite:///app/langgraph_state.db
+      - CORS_ORIGINS=["https://eu.smith.langchain.com"]
       - REDIS_URI=redis://redis:6379
     restart: unless-stopped
     depends_on:
