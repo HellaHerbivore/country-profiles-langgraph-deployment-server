@@ -10,6 +10,7 @@ from starlette.applications import Starlette
 
 from server.config import ServerConfig
 from server.middleware.auth import APIKeyAuthMiddleware
+from server.middleware.clerk_auth import ClerkAuthMiddleware
 from server.middleware.cors import add_cors_middleware
 from server.proxy import LangGraphProxyMiddleware
 
@@ -44,8 +45,12 @@ def create_proxy_app(config: ServerConfig) -> Starlette:
     logger.info(f"Added LangGraph proxy middleware for {config.langgraph_url}")
     
     # 2. Add authentication middleware second (runs second - validates API keys)
-    app.add_middleware(APIKeyAuthMiddleware, config=config)
-    logger.info(f"Added authentication middleware (required: {config.api_key_required})")
+    if config.auth_type == "clerk":
+        app.add_middleware(ClerkAuthMiddleware, config=config)
+        logger.info("Added Clerk JWT authentication middleware")
+    else:
+        app.add_middleware(APIKeyAuthMiddleware, config=config)
+        logger.info(f"Added API key authentication middleware (required: {config.api_key_required})")
     
     # 3. Add CORS middleware last (runs first - handles preflight requests)
     add_cors_middleware(app, config)

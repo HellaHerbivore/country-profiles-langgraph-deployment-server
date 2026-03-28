@@ -261,10 +261,17 @@
 </head>
 <body>
     <div class="container">
+        
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+            <div id="user-button"></div>
+        </div>
+
         <header>
             <h1>Country Profiles Researcher</h1>
             <p>Strategic analysis of animal advocacy issues</p>
         </header>
+
+        <div id="sign-in" style="display: flex; justify-content: center; margin-bottom: 1.5rem;"></div>
 
         <div id="error-msg" class="error-msg"></div>
 
@@ -308,10 +315,12 @@
     const CONFIG = {
         // Your LangGraph server URL (Render backend or local Docker)
         SERVER_URL: "https://country-profiles-langgraph-deployment.onrender.com",
+        // Local Development // SERVER_URL: "http://localhost:8000",
         // API key for authentication (leave empty if auth is disabled)
-        API_KEY: "rocket_1tLAiTle2d2uUHirF39nHAGtuE34eMTXiVMGk9N5aZs",
+        // Removed because using Clerk for authentication // API_KEY: "rocket_1tLAiTle2d2uUHirF39nHAGtuE34eMTXiVMGk9N5aZs",
         // Assistant ID from LANGSERVE_GRAPHS in Dockerfile
-        ASSISTANT_ID: "country_profiles"
+        ASSISTANT_ID: "country_profiles",
+        CLERK_TOKEN: null
     };
 
     // =========================================================================
@@ -397,10 +406,13 @@
     // API headers
     // =========================================================================
     function getHeaders() {
-        const h = { "Content-Type": "application/json" };
-        if (CONFIG.API_KEY) h["x-api-key"] = CONFIG.API_KEY;
-        return h;
+        const headers = { "Content-Type": "application/json" };
+        if (CONFIG.CLERK_TOKEN) {
+            headers["Authorization"] = "Bearer " + CONFIG.CLERK_TOKEN;
+        }
+        return headers;
     }
+
 
     // =========================================================================
     // Create a thread
@@ -683,5 +695,7 @@
         }
     }
     </script>
+
+    <script type="module" src="/src/main.js"></script>
 </body>
 </html>
