@@ -31,12 +31,19 @@ const formSection = document.getElementById('form-section')
 
 // Check if the user is logged in
 if (clerk.isSignedIn) {
-  // If logged in: show the profile button, show the form, hide the sign-in box
   clerk.mountUserButton(userBox)
   formSection.style.display = 'block'
   signInBox.style.display = 'none'
+
+  // Get the session token and pass it to CONFIG for API requests
+  const token = await clerk.session.getToken()
+  CONFIG.CLERK_TOKEN = token
+
+  // Refresh the token every 50 seconds (Clerk tokens expire after 60s)
+  setInterval(async () => {
+    CONFIG.CLERK_TOKEN = await clerk.session.getToken()
+  }, 50000)
 } else {
-  // If logged out: show the sign-in box, hide the form
   clerk.mountSignIn(signInBox)
   formSection.style.display = 'none'
 }

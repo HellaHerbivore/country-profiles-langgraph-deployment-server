@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "sqlalchemy>=2.0.41",
     "httpx>=0.25.0",
+    "PyJWT[crypto]>=2.8.0",
     "uvicorn>=0.24.0",
     "starlette>=0.28.0",
 

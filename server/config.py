@@ -35,6 +35,12 @@ class ServerConfig:
     # Authentication
     api_key: Optional[str] = field(default=None)
     api_key_required: bool = field(default=False)
+
+    # Authentication type: "api_key" or "clerk"
+    auth_type: str = field(default="api_key")
+    clerk_secret_key: Optional[str] = field(default=None)
+    clerk_publishable_key: Optional[str] = field(default=None)
+
     
     # CORS Configuration
     cors_allowed_origins: List[str] = field(default_factory=list)
@@ -145,7 +151,10 @@ def load_config() -> ServerConfig:
             
             # Authentication
             api_key=_get_str_env("ROCKET_API_KEY"),
-            
+            auth_type=_get_str_env_required("AUTH_TYPE", "api_key"),
+            clerk_secret_key=_get_str_env("CLERK_SECRET_KEY"),
+            clerk_publishable_key=_get_str_env("CLERK_PUBLISHABLE_KEY"),
+
             # CORS Configuration  
             cors_allowed_origins=_get_list_env("CORS_ALLOWED_ORIGINS"),
             
