@@ -60,3 +60,7 @@ AGENTS.md
 
 # Docker config
 .dockerignore
+
+# --- NODE / VITE ---
+node_modules/
+dist/

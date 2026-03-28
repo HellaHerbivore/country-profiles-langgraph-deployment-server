@@ -1,0 +1,28 @@
+{
+  "name": "country-profiles-server",
+  "version": "1.0.0",
+  "description": "This repository contains the code for a tutorial on how to deploy LangGraph agents in a production-ready environment with authentication. The tutorial demonstrates how to create a secure proxy server that adds authentication to your LangGraph API endpoints.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HellaHerbivore/country-profiles-langgraph-deployment-server.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/HellaHerbivore/country-profiles-langgraph-deployment-server/issues"
+  },
+  "homepage": "https://github.com/HellaHerbivore/country-profiles-langgraph-deployment-server#readme",
+  "dependencies": {
+    "@clerk/clerk-js": "^6.3.3",
+    "vite": "^8.0.3"
+  }
+}
