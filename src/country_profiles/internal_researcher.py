@@ -111,7 +111,10 @@ def create_analysts(state: ResearchGraphState):
     return {
         "analysts": perspectives_res.analysts,
         "topic": topic,
-        "max_analysts": max_analysts
+        "max_analysts": max_analysts,
+        "messages": [
+            AIMessage(content=f"[PROGRESS:15] Created {len(perspectives_res.analysts)} analysts: {', '.join(a.name for a in perspectives_res.analysts)}", name="System")
+        ]
     }
 
 question_instructions = """You are an analyst tasked with interviewing an expert to learn about a specific topic. 
@@ -283,7 +286,12 @@ def initiate_all_interviews(state: ResearchGraphState):
 
 def collect_sections(state: ResearchGraphState):
     """Join point — waits for all parallel interviews to complete before checking knowledge."""
-    return {}
+    sections = state.get("sections", [])
+    valid = [s for s in sections if s != "FLAG_NO_KNOWLEDGE"]
+    return {
+        "messages": [AIMessage(content=f"[PROGRESS:50] Interviews complete — {len(valid)} sections collected", name="System")]
+    }
+
 
 def check_knowledge(state: ResearchGraphState):
     sections = state.get("sections", [])
@@ -312,7 +320,11 @@ def check_knowledge(state: ResearchGraphState):
 def abort_report(state: ResearchGraphState):
     final_message = "not enough internal knowledge"
     print("\n⚠️ ABORTED: Not enough internal knowledge.\n")
-    return {"final_report": final_message}
+    return {
+        "final_report": final_message,
+        "messages": [AIMessage(content="[PROGRESS:ABORTED] Not enough internal knowledge to generate report", name="System")]
+    }
+
 
 report_writer_instructions = """You are a Lead Strategist. Synthesize the expert memos into a briefing for: {topic}.
 
@@ -356,7 +368,11 @@ def write_report(state: ResearchGraphState):
     else:
         content = str(content)
         
-    return {"content": content}
+    return {
+        "content": content,
+        "messages": [AIMessage(content="[PROGRESS:65] Report draft complete", name="System")]
+    }
+
 
 intro_instructions = "Write the Executive Summary for: {topic} based strictly on the main body:\n{main_report_body}\n\nCRITICAL: Do not mention any analyst or expert names."
 conclusion_instructions = "Write the Tractable Interventions for: {topic} based strictly on the main body:\n{main_report_body}\n\nCRITICAL: Do not mention any analyst or expert names."
@@ -372,7 +388,11 @@ def write_introduction(state: ResearchGraphState):
         content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
     else:
         content = str(content)
-    return {"introduction": content}
+    return {
+        "introduction": content,
+        "messages": [AIMessage(content="[PROGRESS:75] Executive summary written", name="System")]
+    }
+
 
 def write_conclusion(state: ResearchGraphState):
     main_body = state.get("content", "")
@@ -403,8 +423,9 @@ def finalize_report(state: ResearchGraphState):
     # 3. Return the update (flow continues to restructure_report via graph edges)
     return {
         "final_report": final_report_str,
-        "messages": [AIMessage(content=f"### ✅ Report Finalized\n\n{final_report_str}", name="System")]
+        "messages": [AIMessage(content=f"[PROGRESS:85] Report finalized\n\n### ✅ Report Finalized\n\n{final_report_str}", name="System")]
     }
+
 
 # ---------------------------------------------------------------------------
 # 5b. Restructure Report Node — Macro / Meso / Micro / Hidden × 7 Themes
@@ -598,12 +619,13 @@ def restructure_report(state: ResearchGraphState):
         update={
             "structured_report": content,
             "messages": [AIMessage(
-                content=f"### 📊 Structured Profile Complete\n\n{content}",
+                content=f"[PROGRESS:100] Complete\n\n### 📊 Structured Profile Complete\n\n{content}",
                 name="System"
             )]
         },
         goto=END
     )
+
 
 builder = StateGraph(ResearchGraphState)
 builder.add_node("create_analysts", create_analysts)

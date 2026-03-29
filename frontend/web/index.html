@@ -257,6 +257,54 @@
         .btn-secondary:hover:not(:disabled) {
             background: #f0f7f2;
         }
+        /* Progress bar */
+        #progress-bar-container {
+            margin: 1rem 0;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 10px;
+            background: #e5e5e5;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #4a7c59;
+            border-radius: 5px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.4rem;
+        }
+
+        .progress-status-text {
+            font-size: 0.82rem;
+            color: #666;
+        }
+
+        .progress-percent {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #4a7c59;
+        }
+
+        /* Aborted state */
+        .progress-fill.aborted {
+            background: #b91c1c;
+        }
+
+        .progress-percent.aborted {
+            color: #b91c1c;
+        }
+
     </style>
 </head>
 <body>
@@ -296,9 +344,19 @@
                     <span class="spinner" id="spinner"></span>
                     <span id="progress-status">Starting research...</span>
                 </div>
+                <div id="progress-bar-container">              <!-- NEW -->
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span class="progress-status-text" id="progress-status-text"></span>
+                        <span class="progress-percent" id="progress-percent">0%</span>
+                    </div>
+                </div>
                 <div id="progress-log"></div>
             </div>
         </div>
+
 
         <div id="report-section">
             <div class="report-card">
@@ -322,6 +380,40 @@
         ASSISTANT_ID: "country_profiles",
         CLERK_TOKEN: null
     };
+
+    // =========================================================================
+    // Progress bar
+    // =========================================================================
+    let currentPercent = 0;
+
+    function resetProgressBar() {
+        currentPercent = 0;
+        document.getElementById("progress-fill").style.width = "0%";
+        document.getElementById("progress-fill").className = "progress-fill";
+        document.getElementById("progress-percent").textContent = "0%";
+        document.getElementById("progress-percent").className = "progress-percent";
+        document.getElementById("progress-status-text").textContent = "";
+    }
+
+    function updateProgress(percent, statusText) {
+        if (percent <= currentPercent) return;
+        currentPercent = percent;
+        document.getElementById("progress-fill").style.width = percent + "%";
+        document.getElementById("progress-percent").textContent = percent + "%";
+        if (statusText) {
+            document.getElementById("progress-status-text").textContent = statusText;
+        }
+    }
+
+    function abortProgress(statusText) {
+        document.getElementById("progress-fill").classList.add("aborted");
+        document.getElementById("progress-percent").classList.add("aborted");
+        document.getElementById("progress-percent").textContent = "Aborted";
+        if (statusText) {
+            document.getElementById("progress-status-text").textContent = statusText;
+        }
+    }
+
 
     // =========================================================================
     // UI helpers
@@ -354,6 +446,7 @@
         hide("report-section");
         hide("progress-section");
         show("form-section");
+        resetProgressBar();
         document.getElementById("progress-log").innerHTML = "";
         document.getElementById("report-content").innerHTML = "";
         document.getElementById("generate-btn").disabled = false;
@@ -585,22 +678,40 @@
                 } else if (event.type === "tool") {
                     addLog("Tool complete: " + event.name);
                 } else if (event.type === "content") {
-                    fullContent += event.text;
+                    // Check for progress markers
+                    const progressMatch = event.text.match(/\[PROGRESS:(\d+)\]\s*(.*)/);
+                    const abortMatch = event.text.match(/\[PROGRESS:ABORTED\]\s*(.*)/);
 
-                    // Detect phase transitions from the AI messages
-                    if (event.text.includes("Report Finalized")) {
-                        setStatus("Report finalized, restructuring...");
-                        addLog("Report finalized");
-                    } else if (event.text.includes("Structured Profile Complete")) {
-                        setStatus("Structured profile complete!");
-                        addLog("Structured profile generated");
-                    } else if (event.text.includes("ABORTED")) {
-                        setStatus("Research aborted - not enough data");
-                        addLog("Aborted: not enough internal knowledge");
+                    if (abortMatch) {
+                        abortProgress(abortMatch[1]);
+                        addLog(abortMatch[1] || "Research aborted");
+                        // Strip marker, keep remaining content
+                        const afterMarker = event.text.replace(/\[PROGRESS:ABORTED\][^\n]*\n?/, "");
+                        if (afterMarker.trim()) fullContent += afterMarker;
+                    } else if (progressMatch) {
+                        const percent = parseInt(progressMatch[1], 10);
+                        const detail = progressMatch[2];
+                        updateProgress(percent, detail);
+                        if (detail) addLog(detail);
+                        // Strip marker, keep remaining content (e.g. the report text)
+                        const afterMarker = event.text.replace(/\[PROGRESS:\d+\][^\n]*\n?/, "");
+                        if (afterMarker.trim()) fullContent += afterMarker;
+                    } else {
+                        fullContent += event.text;
+
+                        // Existing phase detection (kept as fallback)
+                        if (event.text.includes("Report Finalized")) {
+                            setStatus("Report finalized, restructuring...");
+                            addLog("Report finalized");
+                        } else if (event.text.includes("Structured Profile Complete")) {
+                            setStatus("Structured profile complete!");
+                            addLog("Structured profile generated");
+                        } else if (event.text.includes("ABORTED")) {
+                            setStatus("Research aborted - not enough data");
+                            addLog("Aborted: not enough internal knowledge");
+                        }
                     }
 
-                    // Keep track of the latest substantial content block
-                    // The final messages contain the full report
                     lastReportContent = fullContent;
                 }
             }
@@ -662,6 +773,7 @@
         document.getElementById("generate-btn").disabled = true;
         hide("form-section");
         show("progress-section");
+        resetProgressBar();
         setStatus("Creating research thread...");
         addLog("Topic: " + topic);
         addLog("Analysts: " + maxAnalysts);
