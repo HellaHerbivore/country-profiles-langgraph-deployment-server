@@ -609,7 +609,7 @@
                 return { type: "tool", name: message.name || "Unknown" };
             }
 
-            if (msgType === "AIMessageChunk") {
+            if (msgType === "AIMessageChunk" || msgType === "ai") {
                 let content = message.content || "";
                 // Gemini/Google models return content as an array of blocks
                 // e.g. [{type: "text", text: "..."}] instead of a plain string
