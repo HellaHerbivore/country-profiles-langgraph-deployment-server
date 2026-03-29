@@ -113,7 +113,7 @@ def create_analysts(state: ResearchGraphState):
         "topic": topic,
         "max_analysts": max_analysts,
         "messages": [
-            AIMessage(content=f"[PROGRESS:15] Created {len(perspectives_res.analysts)} analysts: {', '.join(a.name for a in perspectives_res.analysts)}", name="System")
+            AIMessage(content=f"[PROGRESS:15] Created {len(perspectives_res.analysts)} analysts: {', '.join(a.role for a in perspectives_res.analysts)}", name="System")
         ]
     }
 
