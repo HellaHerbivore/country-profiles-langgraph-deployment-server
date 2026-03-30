@@ -38,11 +38,20 @@
         }
 
         .country-badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
             margin-top: 0.5rem;
             font-size: 0.85rem;
             color: #555;
             letter-spacing: 0.02em;
+        }
+
+        .flag-icon {
+            width: 1.2em;
+            height: 0.8em;
+            border-radius: 2px;
+            object-fit: cover;
         }
 
         .form-card {
@@ -355,7 +364,7 @@
         <header>
             <h1>Country Profiles Researcher</h1>
             <p>Strategic analysis of animal advocacy issues</p>
-            <span class="country-badge">🇮🇳 India</span>
+            <span class="country-badge"><img src="assets/flagpedia_india.svg" class="flag-icon" alt="Indian flag"> India</span>
         </header>
 
         <div id="sign-in" style="display: flex; justify-content: center; margin-bottom: 1.5rem;"></div>
