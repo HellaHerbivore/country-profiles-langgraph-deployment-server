@@ -498,13 +498,18 @@
     // =========================================================================
     // API headers
     // =========================================================================
-    function getHeaders() {
+    async function getHeaders() {
         const headers = { "Content-Type": "application/json" };
+        if (typeof clerk !== "undefined" && clerk.session) {
+            const token = await clerk.session.getToken();
+            CONFIG.CLERK_TOKEN = token;
+        }
         if (CONFIG.CLERK_TOKEN) {
             headers["Authorization"] = "Bearer " + CONFIG.CLERK_TOKEN;
         }
         return headers;
     }
+
 
 
     // =========================================================================
