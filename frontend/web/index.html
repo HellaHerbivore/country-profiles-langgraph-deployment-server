@@ -563,9 +563,12 @@
         }
         if (CONFIG.CLERK_TOKEN) {
             headers["Authorization"] = "Bearer " + CONFIG.CLERK_TOKEN;
+        } else {
+            throw new Error("Your session has expired. Please sign in again.");
         }
         return headers;
     }
+
 
 
 
@@ -863,8 +866,18 @@
             console.error(err);
             setStatus("Error occurred");
             document.getElementById("spinner").style.display = "none";
-            showError(err.message);
-            show("form-section");
+
+            if (err.message.includes("401") || err.message.includes("session has expired")) {
+                showError("Your session has expired. Please sign in again.");
+                document.getElementById("sign-in").style.display = "flex";
+                hide("form-section");
+                if (typeof clerk !== "undefined") {
+                    clerk.mountSignIn(document.getElementById("sign-in"));
+                }
+            } else {
+                showError(err.message);
+                show("form-section");
+            }
             document.getElementById("generate-btn").disabled = false;
         }
     }
