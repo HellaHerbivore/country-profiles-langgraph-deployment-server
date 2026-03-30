@@ -95,6 +95,36 @@
             border-color: #4a7c59;
         }
 
+        .topic-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .topic-row input[type="text"] {
+            flex: 1;
+        }
+
+        .btn-randomize {
+            width: 38px;
+            height: 38px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .btn-randomize:hover {
+            border-color: #4a7c59;
+            background: #f0f7f2;
+        }
+
         .analyst-hint {
             color: #888;
             font-size: 0.82rem;
@@ -326,7 +356,10 @@
         <div id="form-section" class="form-card">
             <div class="form-group">
                 <label for="topic">Research Topic</label>
-                <input type="text" id="topic" placeholder="e.g. Animal advocacy in Tamil Nadu" />
+                <div class="topic-row">
+                    <input type="text" id="topic" placeholder="e.g. Animal advocacy in Tamil Nadu" />
+                    <button type="button" class="btn-randomize" id="randomize-btn" onclick="randomizeTopic()" title="Try a sample question" aria-label="Randomize topic">&#127922;</button>
+                </div>
             </div>
             <div class="form-group">
                 <label for="max-analysts">Number of Analysts</label>
@@ -380,6 +413,30 @@
         ASSISTANT_ID: "country_profiles",
         CLERK_TOKEN: null
     };
+
+    // =========================================================================
+    // Topic randomizer
+    // =========================================================================
+    const SAMPLE_TOPICS = [
+        "What are the dangers that animal advocates face in India?",
+        "Tell me about the state of pig farming in India",
+        "What are key missing data for fish farming in India?",
+        "Animal advocacy differences between southern and northern India",
+        "How should cage-free campaigns be adapted to India?",
+        "What is the current state of dairy welfare regulations in India?",
+        "How does religious and cultural context affect animal advocacy in India?",
+        "What are the biggest challenges for farmed animal sanctuaries in India?",
+        "Tell me about the shrimp aquaculture industry in India",
+        "What corporate campaigns have been most effective for animal welfare in India?"
+    ];
+
+    let _topicIndex = -1;
+
+    function randomizeTopic() {
+        _topicIndex = (_topicIndex + 1) % SAMPLE_TOPICS.length;
+        document.getElementById("topic").value = SAMPLE_TOPICS[_topicIndex];
+        document.getElementById("topic").focus();
+    }
 
     // =========================================================================
     // Progress bar
