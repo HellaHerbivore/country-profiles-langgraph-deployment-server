@@ -519,7 +519,7 @@
         const threadId = crypto.randomUUID();
         const resp = await fetch(`${CONFIG.SERVER_URL}/threads`, {
             method: "POST",
-            headers: getHeaders(),
+            headers: await getHeaders(),
             body: JSON.stringify({
                 thread_id: threadId,
                 metadata: { user_id: "web-user" },
@@ -641,7 +641,7 @@
     async function streamResearch(threadId, topic, maxAnalysts) {
         const resp = await fetch(`${CONFIG.SERVER_URL}/threads/${threadId}/runs/stream`, {
             method: "POST",
-            headers: getHeaders(),
+            headers:await getHeaders(),
             body: JSON.stringify({
                 assistant_id: CONFIG.ASSISTANT_ID,
                 input: {
