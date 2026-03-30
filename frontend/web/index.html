@@ -563,11 +563,12 @@
         }
         if (CONFIG.CLERK_TOKEN) {
             headers["Authorization"] = "Bearer " + CONFIG.CLERK_TOKEN;
-        } else {
+        } else if (typeof clerk === "undefined" || !clerk.session) {
             throw new Error("Your session has expired. Please sign in again.");
         }
         return headers;
     }
+
 
 
 
