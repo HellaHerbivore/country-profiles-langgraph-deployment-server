@@ -64,6 +64,6 @@ AGENTS.md
 node_modules
 dist/
 
-# --- Random Scripts ---
+# --- COUNTRY PROFILES SPECIFIC ---
 test_tiny.txt
 .upload_manifest.json

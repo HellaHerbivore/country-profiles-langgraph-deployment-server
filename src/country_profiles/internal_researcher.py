@@ -34,6 +34,8 @@ gemini_client = genai.Client(api_key=google_api_key)
 # Internal Vaults
 FOREIGN_ACADEMIC_STORE = "fileSearchStores/research-assistant-vault-7ya8m561y6pn"
 GROUND_TRUTH_STORE = "fileSearchStores/groundtruthadvocacyfeedback-2ojwsxpiytnc"
+LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-75awfk5pza8p"
+
 
 # ---------------------------------------------------------------------------
 # 2. Shapes of our Data (Schemas)
@@ -148,7 +150,7 @@ def generate_answer(state: InterviewState):
 
     model_config = types.GenerateContentConfig(
         system_instruction=expert_instructions,
-        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, GROUND_TRUTH_STORE]))],
+        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, GROUND_TRUTH_STORE, LOCAL_ACADEMIC_STORE]))],
         temperature=0.0,
     )
 
