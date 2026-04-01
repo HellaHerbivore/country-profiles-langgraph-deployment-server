@@ -41,3 +41,7 @@ dev = [
     "langgraph-api>=0.2.48",
     "langgraph-cli[inmem]>=0.3.1",
 ]
+[project.optional-dependencies]
+filestore = [
+    "marker-pdf>=1.0.0",
+]

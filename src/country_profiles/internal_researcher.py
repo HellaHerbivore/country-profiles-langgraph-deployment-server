@@ -31,8 +31,8 @@ llm = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", api_key=google_api_
 # The reader tool for digging through your files
 gemini_client = genai.Client(api_key=google_api_key)
 
-# Two Internal Vaults
-DESKTOP_STORE = "fileSearchStores/research-assistant-vault-7ya8m561y6pn"
+# Internal Vaults
+FOREIGN_ACADEMIC_STORE = "fileSearchStores/research-assistant-vault-7ya8m561y6pn"
 GROUND_TRUTH_STORE = "fileSearchStores/groundtruthadvocacyfeedback-2ojwsxpiytnc"
 
 # ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ def generate_answer(state: InterviewState):
 
     model_config = types.GenerateContentConfig(
         system_instruction=expert_instructions,
-        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[DESKTOP_STORE, GROUND_TRUTH_STORE]))],
+        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, GROUND_TRUTH_STORE]))],
         temperature=0.0,
     )
 
