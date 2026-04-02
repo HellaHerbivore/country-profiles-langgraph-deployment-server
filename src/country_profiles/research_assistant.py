@@ -27,8 +27,9 @@ from google.genai.types import FunctionCallingConfigMode
 gemini_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY")) 
 
 # Two Internal Vaults
-DESKTOP_STORE = "fileSearchStores/research-assistant-vault-7ya8m561y6pn"
-GROUND_TRUTH_STORE = "fileSearchStores/groundtruthadvocacyfeedback-2ojwsxpiytnc"
+FOREIGN_ACADEMIC_STORE = "fileSearchStores/foreign-academic-sources-bqaqi98at2b3"
+ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy92h3"
+LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 
 ### LLM
 load_dotenv()
@@ -279,7 +280,7 @@ def generate_answer(state: InterviewState):
         tools=[
             types.Tool(
                 file_search=types.FileSearch(
-                    file_search_store_names=[DESKTOP_STORE, GROUND_TRUTH_STORE]
+                    file_search_store_names=[FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE]
                 )
             )
         ],

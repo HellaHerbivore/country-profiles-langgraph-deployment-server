@@ -32,9 +32,9 @@ llm = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", api_key=google_api_
 gemini_client = genai.Client(api_key=google_api_key)
 
 # Internal Vaults
-FOREIGN_ACADEMIC_STORE = "fileSearchStores/research-assistant-vault-7ya8m561y6pn"
-GROUND_TRUTH_STORE = "fileSearchStores/groundtruthadvocacyfeedback-2ojwsxpiytnc"
-LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-75awfk5pza8p"
+FOREIGN_ACADEMIC_STORE = "fileSearchStores/foreign-academic-sources-bqaqi98at2b3"
+ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy92h3"
+LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ def generate_answer(state: InterviewState):
 
     model_config = types.GenerateContentConfig(
         system_instruction=expert_instructions,
-        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, GROUND_TRUTH_STORE, LOCAL_ACADEMIC_STORE]))],
+        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE]))],
         temperature=0.0,
     )
 

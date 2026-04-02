@@ -4,12 +4,12 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from colorama import Fore, Style
-from config import get_client, FOREIGN_ACADEMIC_STORE, GROUND_TRUTH_STORE, LOCAL_ACADEMIC_STORE
+from config import get_client, FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE
 
 # Store aliases for convenience
 STORE_ALIASES = {
     "foreign-academic": FOREIGN_ACADEMIC_STORE,
-    "ground-truth": GROUND_TRUTH_STORE,
+    "on-ground": ON_GROUND_ADVOCATE_STORE,
     "local-academic": LOCAL_ACADEMIC_STORE,
 }
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Resolve store alias or use raw ID
-    store_name = STORE_ALIASES.get(args.store, args.store)
+    store_name = STORE_ALIASES.get(args.store) or args.store
     print(f"Target store: {store_name}")
 
     # Collect files to upload

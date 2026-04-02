@@ -11,13 +11,13 @@ if __name__ == "__main__":
     group.add_argument("--input-dir", type=Path, help="Directory of PDFs to process")
     group.add_argument("--input-file", type=Path, help="Single PDF to process")
     parser.add_argument("--output-dir", type=Path, required=True, help="Where to save Markdown files")
-    parser.add_argument("--store", required=True, help="Store alias (foreign-academic, ground-truth, local-academic) or full ID")
+    parser.add_argument("--store", required=True, help="Store alias (foreign-academic, on-ground, local-academic) or full ID")
     parser.add_argument("--mode", choices=["pdf-only", "md-only", "both"], default="both", help="Which files to upload (default: both)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would happen without doing it")
     parser.add_argument("--skip-convert", action="store_true", help="Skip Marker conversion, just upload existing files")
 
     args = parser.parse_args()
-    store_name = STORE_ALIASES.get(args.store, args.store)
+    store_name = STORE_ALIASES.get(args.store) or args.store
 
     # Gather PDFs
     if args.input_file:

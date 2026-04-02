@@ -9,9 +9,9 @@ env_path = script_folder / ".." / ".." / ".env"
 load_dotenv(dotenv_path=env_path)
 
 # Store constants (same as internal_researcher.py:35-36)
-FOREIGN_ACADEMIC_STORE = "fileSearchStores/research-assistant-vault-7ya8m561y6pn"
-GROUND_TRUTH_STORE = "fileSearchStores/groundtruthadvocacyfeedback-2ojwsxpiytnc"
-LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-75awfk5pza8p"
+FOREIGN_ACADEMIC_STORE = "fileSearchStores/foreign-academic-sources-bqaqi98at2b3"
+ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy92h3"
+LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 
 def get_client():
     """Return a configured genai Client."""
