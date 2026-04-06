@@ -76,6 +76,7 @@ export async function streamResearch(threadId, topic, maxAnalysts, callbacks = {
     const parser = new SSEParser();
 
     let fullContent = "";
+    let layersBriefingSent = false;
 
     while (true) {
         const { done, value } = await reader.read();
@@ -92,15 +93,6 @@ export async function streamResearch(threadId, topic, maxAnalysts, callbacks = {
             } else if (event.type === "tool") {
                 callbacks.onLog?.("Tool complete: " + event.name);
             } else if (event.type === "content") {
-                // Check for layers briefing marker
-                const layersMatch = event.text.match(/\[LAYERS_BRIEFING\]([\s\S]*)/);
-                if (layersMatch) {
-                    callbacks.onLayersBriefing?.(layersMatch[1]);
-                    callbacks.onLog?.("Layers briefing received");
-                    // Don't add layers JSON to fullContent — it's not part of the report
-                    continue;
-                }
-
                 const progressMatch = event.text.match(/\[PROGRESS:(\d+)\]\s*(.*)/);
                 const abortMatch = event.text.match(/\[PROGRESS:ABORTED\]\s*(.*)/);
 
@@ -128,6 +120,25 @@ export async function streamResearch(threadId, topic, maxAnalysts, callbacks = {
                     } else if (event.text.includes("ABORTED")) {
                         callbacks.onStatus?.("Research aborted - not enough data");
                         callbacks.onLog?.("Aborted: not enough internal knowledge");
+                    }
+                }
+
+                // Check accumulated content for complete layers briefing
+                if (!layersBriefingSent) {
+                    const marker = "[LAYERS_BRIEFING]";
+                    const idx = fullContent.indexOf(marker);
+                    if (idx !== -1) {
+                        const jsonStr = fullContent.slice(idx + marker.length).trim();
+                        try {
+                            JSON.parse(jsonStr);
+                            // JSON is complete — fire callback and strip from fullContent
+                            layersBriefingSent = true;
+                            callbacks.onLayersBriefing?.(jsonStr);
+                            callbacks.onLog?.("Layers briefing received");
+                            fullContent = fullContent.slice(0, idx);
+                        } catch (e) {
+                            // JSON not complete yet — keep accumulating
+                        }
                     }
                 }
 
