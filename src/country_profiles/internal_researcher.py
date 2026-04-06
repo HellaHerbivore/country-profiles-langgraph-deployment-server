@@ -78,10 +78,49 @@ class ResearchGraphState(TypedDict):
     messages: Annotated[list, operator.add]
     final_report: str
     structured_report: str
+    layers_briefing: str
 
 # ---------------------------------------------------------------------------
 # 3. Work Nodes (The Steps)
 # ---------------------------------------------------------------------------
+
+# --- 3a. Layers Briefing (quick macro/meso/micro preview) ---
+
+layers_briefing_instructions = """Return an introductory strategic briefing structured across three layers for the given query. For each layer, write 4–6 sentences of analytical prose in the voice of a policy analyst. Bold the 2–3 most important phrases per layer using markdown **bold**. Macro covers political, legal, and regulatory forces. Meso covers institutional actors and power structures. Micro covers cultural, economic, and behavioral dynamics at the producer/consumer level. Also return a single synthesis sentence (max 20 words) that names the dominant pattern across all three layers. Respond as JSON with keys: synthesis, macro, meso, micro."""
+
+def generate_layers_briefing(state: ResearchGraphState):
+    topic = state.get("topic")
+    if not topic and state.get("messages"):
+        topic = state["messages"][-1].content
+
+    result = llm.invoke([
+        SystemMessage(content=layers_briefing_instructions),
+        HumanMessage(content=f"Topic: {topic}")
+    ])
+
+    content = result.content
+    if isinstance(content, list):
+        content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
+    else:
+        content = str(content)
+
+    # Strip markdown code fences if present
+    content = content.strip()
+    if content.startswith("```"):
+        content = re.sub(r'^```(?:json)?\s*', '', content)
+        content = re.sub(r'\s*```$', '', content)
+
+    return {
+        "layers_briefing": content,
+        "topic": topic,
+        "messages": [AIMessage(
+            content=f"[LAYERS_BRIEFING]{content}",
+            name="System"
+        )]
+    }
+
+# --- 3b. Analyst Creation ---
+
 analyst_instructions="""You are tasked with creating a set of AI analyst personas. Follow these instructions carefully:
 1. First, review the research topic:
 {topic}
@@ -630,17 +669,19 @@ def restructure_report(state: ResearchGraphState):
 
 
 builder = StateGraph(ResearchGraphState)
+builder.add_node("generate_layers_briefing", generate_layers_briefing)
 builder.add_node("create_analysts", create_analysts)
 builder.add_node("conduct_interview", interview_builder.compile())
 builder.add_node("collect_sections", collect_sections)
-builder.add_node("abort_report", abort_report)       
+builder.add_node("abort_report", abort_report)
 builder.add_node("write_report", write_report)
 builder.add_node("write_introduction", write_introduction)
 builder.add_node("write_conclusion", write_conclusion)
 builder.add_node("finalize_report", finalize_report)
 builder.add_node("restructure_report", restructure_report)
 
-builder.add_edge(START, "create_analysts")
+builder.add_edge(START, "generate_layers_briefing")
+builder.add_edge("generate_layers_briefing", "create_analysts")
 builder.add_conditional_edges("create_analysts", initiate_all_interviews, ["conduct_interview"])
 
 # All parallel interviews join here, THEN check knowledge once

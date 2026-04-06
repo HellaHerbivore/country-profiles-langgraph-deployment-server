@@ -1,0 +1,86 @@
+/* ==========================================================================
+   Design Tokens — "The Digital Curator"
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Inter:wght@300..700&display=swap');
+
+:root {
+  /* ── Surface Hierarchy ── */
+  --surface:                   #f8f9fb;
+  --surface-container-lowest:  #ffffff;
+  --surface-container-low:     #F4F5F7;
+  --surface-container:         #edeef0;
+  --surface-container-high:    #e6e7e9;
+  --surface-container-highest: #e2e3e5;
+
+  /* ── Primary (Institutional Navy) ── */
+  --primary:           #00081e;
+  --primary-container: #0a1f44;
+  --on-primary:        #ffffff;
+  --on-primary-container: #d0d6e8;
+
+  /* ── Secondary (Warm Gold) ── */
+  --secondary:           #735c00;
+  --secondary-container: #e9c349;
+  --secondary-fixed-dim: #e9c349;
+  --on-secondary:        #ffffff;
+
+  /* ── Neutral / Text ── */
+  --on-surface:      #191c1e;
+  --on-surface-variant: #44474a;
+  --outline-variant: #c5c6cf;
+
+  /* ── Feedback ── */
+  --error:    #b91c1c;
+  --on-error: #ffffff;
+
+  /* ── Typography ── */
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* ── Type Scale ── */
+  --headline-lg: 2rem;
+  --headline-md: 1.5rem;
+  --title-lg:    1.25rem;
+  --title-md:    1.1rem;
+  --body-lg:     1.05rem;
+  --body-md:     0.95rem;
+  --label-md:    0.85rem;
+  --label-sm:    0.75rem;
+
+  /* ── Line Heights ── */
+  --lh-tight:   1.25;
+  --lh-normal:  1.5;
+  --lh-relaxed: 1.7;
+
+  /* ── Spacing Scale ── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* ── Elevation ── */
+  --shadow-ambient: 0px 12px 32px rgba(10, 31, 68, 0.06);
+  --shadow-inset:   inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  --ghost-border:   rgba(197, 198, 207, 0.2);
+
+  /* ── Border Radii ── */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 1rem;
+
+  /* ── Layout ── */
+  --nav-height:       56px;
+  --bottom-bar-height: 72px;
+  --side-panel-width:  380px;
+
+  /* ── Transitions ── */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-md:   200ms;
+  --duration-lg:   350ms;
+}

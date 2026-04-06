@@ -3,905 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Country Profiles Researcher</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #f5f5f0;
-            color: #2d2d2d;
-            min-height: 100vh;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        header h1 {
-            font-size: 1.6rem;
-            font-weight: 600;
-            color: #1a1a1a;
-            margin-bottom: 0.3rem;
-        }
-
-        header p {
-            color: #666;
-            font-size: 0.95rem;
-        }
-
-        .country-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3rem;
-            margin-top: 0.5rem;
-            font-size: 0.85rem;
-            color: #555;
-            letter-spacing: 0.02em;
-        }
-
-        .flag-icon {
-            width: 1.2em;
-            height: 0.8em;
-            border-radius: 2px;
-            object-fit: cover;
-        }
-
-        .form-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            margin-bottom: 1.5rem;
-        }
-
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        .form-group:last-child {
-            margin-bottom: 0;
-        }
-
-        label {
-            display: block;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: #444;
-            margin-bottom: 0.4rem;
-        }
-
-        input[type="text"] {
-            width: 100%;
-            padding: 0.7rem 0.9rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            transition: border-color 0.2s;
-        }
-
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #4a7c59;
-        }
-
-        .analyst-row {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        input[type="number"] {
-            width: 70px;
-            padding: 0.7rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            text-align: center;
-        }
-
-        input[type="number"]:focus {
-            outline: none;
-            border-color: #4a7c59;
-        }
-
-        .topic-row {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .topic-row input[type="text"] {
-            flex: 1;
-        }
-
-        .btn-randomize {
-            width: 38px;
-            height: 38px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background: white;
-            font-size: 1.1rem;
-            cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .btn-randomize:hover {
-            border-color: #4a7c59;
-            background: #f0f7f2;
-        }
-
-        .analyst-hint {
-            color: #888;
-            font-size: 0.82rem;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 0.8rem;
-            background: #4a7c59;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-            margin-top: 0.5rem;
-        }
-
-        .btn:hover:not(:disabled) {
-            background: #3d6a4b;
-        }
-
-        .btn:disabled {
-            background: #aaa;
-            cursor: not-allowed;
-        }
-
-        /* Progress section */
-        #progress-section {
-            display: none;
-            margin-bottom: 1.5rem;
-        }
-
-        .progress-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-
-        .progress-title {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #444;
-            margin-bottom: 0.8rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #ddd;
-            border-top-color: #4a7c59;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        #progress-log {
-            font-family: "SF Mono", "Fira Code", monospace;
-            font-size: 0.8rem;
-            color: #555;
-            max-height: 200px;
-            overflow-y: auto;
-            line-height: 1.6;
-        }
-
-        .log-entry {
-            padding: 0.15rem 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .log-entry:last-child {
-            border-bottom: none;
-        }
-
-        /* Report section */
-        #report-section {
-            display: none;
-        }
-
-        .report-card {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-
-        #report-content {
-            line-height: 1.7;
-            font-size: 0.95rem;
-        }
-
-        #report-content h1, #report-content h2, #report-content h3,
-        #report-content h4, #report-content h5 {
-            margin-top: 1.5rem;
-            margin-bottom: 0.5rem;
-            color: #1a1a1a;
-        }
-
-        #report-content h1 { font-size: 1.4rem; }
-        #report-content h2 { font-size: 1.2rem; }
-        #report-content h3 { font-size: 1.05rem; }
-
-        #report-content p {
-            margin-bottom: 0.8rem;
-        }
-
-        #report-content ul, #report-content ol {
-            margin: 0.5rem 0 0.8rem 1.5rem;
-        }
-
-        #report-content li {
-            margin-bottom: 0.3rem;
-        }
-
-        #report-content strong {
-            color: #1a1a1a;
-        }
-
-        #report-content hr {
-            border: none;
-            border-top: 1px solid #e0e0e0;
-            margin: 1.5rem 0;
-        }
-
-        #report-content blockquote {
-            border-left: 3px solid #4a7c59;
-            padding-left: 1rem;
-            margin: 0.8rem 0;
-            color: #555;
-        }
-
-        /* Error */
-        .error-msg {
-            background: #fef2f2;
-            color: #b91c1c;
-            padding: 0.8rem 1rem;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-            display: none;
-        }
-
-        /* New research button */
-        .btn-secondary {
-            background: transparent;
-            color: #4a7c59;
-            border: 2px solid #4a7c59;
-            margin-top: 1.5rem;
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            background: #f0f7f2;
-        }
-        /* Progress bar */
-        #progress-bar-container {
-            margin: 1rem 0;
-        }
-
-        .progress-track {
-            width: 100%;
-            height: 10px;
-            background: #e5e5e5;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            width: 0%;
-            background: #4a7c59;
-            border-radius: 5px;
-            transition: width 0.5s ease;
-        }
-
-        .progress-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 0.4rem;
-        }
-
-        .progress-status-text {
-            font-size: 0.82rem;
-            color: #666;
-        }
-
-        .progress-percent {
-            font-size: 0.82rem;
-            font-weight: 600;
-            color: #4a7c59;
-        }
-
-        /* Aborted state */
-        .progress-fill.aborted {
-            background: #b91c1c;
-        }
-
-        .progress-percent.aborted {
-            color: #b91c1c;
-        }
-
-    </style>
+    <title>Country Profiles — India</title>
+    <link rel="stylesheet" href="/styles/tokens.css">
+    <link rel="stylesheet" href="/styles/layout.css">
+    <link rel="stylesheet" href="/styles/components.css">
+    <link rel="stylesheet" href="/styles/report.css">
 </head>
 <body>
-    <div class="container">
-        
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+
+    <!-- ── Navigation Bar ── -->
+    <nav class="nav-bar">
+        <div class="nav-brand">
+            <span class="nav-title">Country Profiles</span>
+            <span class="nav-badge">
+                <img src="assets/flagpedia_india.svg" class="flag-icon" alt="Indian flag">
+                India
+            </span>
+        </div>
+        <div class="nav-actions">
             <div id="user-button"></div>
         </div>
+    </nav>
 
-        <header>
-            <h1>Country Profiles Researcher</h1>
-            <p>Strategic analysis of animal advocacy issues</p>
-            <span class="country-badge"><img src="assets/flagpedia_india.svg" class="flag-icon" alt="Indian flag"> India</span>
-        </header>
+    <!-- ── Content Shell (two-panel grid) ── -->
+    <div class="content-shell">
 
-        <div id="sign-in" style="display: flex; justify-content: center; margin-bottom: 1.5rem;"></div>
+        <!-- ── Main Area ── -->
+        <main class="main-area">
+            <div id="sign-in" class="sign-in-overlay" style="display: none;"></div>
 
-        <div id="error-msg" class="error-msg"></div>
+            <div id="error-banner" class="error-banner"></div>
 
-        <div id="form-section" class="form-card">
-            <div class="form-group">
-                <label for="topic">Research Topic</label>
-                <div class="topic-row">
-                    <input type="text" id="topic" placeholder="e.g. Animal advocacy in Tamil Nadu" />
-                    <button type="button" class="btn-randomize" id="randomize-btn" onclick="randomizeTopic()" title="Try a sample question" aria-label="Randomize topic">&#127922;</button>
+            <!-- Layers Panel (always visible) -->
+            <section id="layers-panel" class="layers-panel">
+                <p class="layers-eyebrow">HOW CHANGE MOVES THROUGH THE LAYERS</p>
+                <h2 class="layers-headline" id="layers-headline">
+                    Enter a research topic to see how change moves through the macro, meso, and micro layers.
+                </h2>
+                <div class="layers-grid">
+                    <div class="layer-card" id="layer-macro">
+                        <span class="layer-pill layer-pill--macro">MACRO</span>
+                        <div class="layer-body" id="layer-macro-body">
+                            Policy, legal, and regulatory forces that shape the national landscape. Enter a topic to see the structural levers at play.
+                        </div>
+                    </div>
+                    <div class="layer-card" id="layer-meso">
+                        <span class="layer-pill layer-pill--meso">MESO</span>
+                        <div class="layer-body" id="layer-meso-body">
+                            Institutional actors — industry bodies, retailers, cooperatives, NGOs — that translate policy into practice. Enter a topic to see who holds power at this level.
+                        </div>
+                    </div>
+                    <div class="layer-card" id="layer-micro">
+                        <span class="layer-pill layer-pill--micro">MICRO</span>
+                        <div class="layer-body" id="layer-micro-body">
+                            Cultural, economic, and behavioral dynamics at the level of producers, consumers, and communities. Enter a topic to see the on-the-ground realities.
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="form-group">
-                <label for="max-analysts">Number of Analysts</label>
-                <div class="analyst-row">
-                    <input type="number" id="max-analysts" value="3" min="1" max="6" />
-                    <span class="analyst-hint">Each analyst explores a different theme (1-6)</span>
-                </div>
-            </div>
-            <button class="btn" id="generate-btn" onclick="startResearch()">Generate Report</button>
-        </div>
+            </section>
 
-        <div id="progress-section">
-            <div class="progress-card">
-                <div class="progress-title">
+            <!-- Loading State -->
+            <div id="report-loading" class="report-loading">
+                <span class="spinner"></span>
+                <p class="report-loading-text">Compiling your briefing&hellip;</p>
+            </div>
+
+            <!-- Report Surface -->
+            <div id="report-surface" class="report-surface">
+                <div id="report-content"></div>
+                <button class="btn-secondary btn-new-research" onclick="resetForm()">New Research</button>
+            </div>
+        </main>
+
+        <!-- ── Side Panel ── -->
+        <aside class="side-panel">
+            <!-- Empty State -->
+            <div id="panel-empty" class="panel-empty">
+                <div class="panel-empty-icon">&#128203;</div>
+                <p class="panel-empty-text">Research activity will appear here</p>
+            </div>
+
+            <!-- Research Metadata -->
+            <div id="meta-card" class="meta-card">
+                <div class="meta-label">Research Topic</div>
+                <div class="meta-value" id="meta-topic"></div>
+                <div class="meta-label" style="margin-top: var(--space-sm);">Analysts</div>
+                <div class="meta-value" id="meta-analysts"></div>
+            </div>
+
+            <!-- Progress -->
+            <div id="progress-container" class="progress-container panel-section">
+                <div class="progress-header">
                     <span class="spinner" id="spinner"></span>
                     <span id="progress-status">Starting research...</span>
                 </div>
-                <div id="progress-bar-container">              <!-- NEW -->
-                    <div class="progress-track">
-                        <div class="progress-fill" id="progress-fill"></div>
-                    </div>
-                    <div class="progress-info">
-                        <span class="progress-status-text" id="progress-status-text"></span>
-                        <span class="progress-percent" id="progress-percent">0%</span>
-                    </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progress-fill"></div>
                 </div>
-                <div id="progress-log"></div>
+                <div class="progress-info">
+                    <span class="progress-status-text" id="progress-status-text"></span>
+                    <span class="progress-percent" id="progress-percent">0%</span>
+                </div>
             </div>
-        </div>
 
-
-        <div id="report-section">
-            <div class="report-card">
-                <div id="report-content"></div>
-                <button class="btn btn-secondary" onclick="resetForm()">New Research</button>
+            <!-- Log -->
+            <div class="panel-section">
+                <div id="progress-log" class="log-container"></div>
             </div>
+        </aside>
+    </div>
+
+    <!-- ── Mobile Side Panel Toggle ── -->
+    <button class="side-panel-toggle" onclick="toggleSidePanel()" aria-label="Toggle research panel">
+        &#9776;
+    </button>
+
+    <!-- ── Bottom Bar (Glassmorphism) ── -->
+    <div class="bottom-bar">
+        <div class="bottom-bar-inner">
+            <input
+                type="text"
+                id="topic"
+                class="input-text"
+                placeholder="Enter a research topic, e.g. Animal advocacy in Tamil Nadu"
+            />
+            <button
+                type="button"
+                class="btn-icon"
+                id="randomize-btn"
+                onclick="randomizeTopic()"
+                title="Try a sample question"
+                aria-label="Randomize topic"
+            >&#127922;</button>
+            <div class="analyst-control">
+                <label class="analyst-label" for="max-analysts">Analysts</label>
+                <input
+                    type="number"
+                    id="max-analysts"
+                    class="input-number"
+                    value="3"
+                    min="1"
+                    max="6"
+                />
+            </div>
+            <button
+                class="btn-primary"
+                id="generate-btn"
+                onclick="startResearch()"
+            >Generate</button>
         </div>
     </div>
 
-    <script>
-    // =========================================================================
-    // CONFIGURATION — Update these for your deployment
-    // =========================================================================
-    const CONFIG = {
-        // Your LangGraph server URL (Render backend or local Docker)
-        SERVER_URL: "https://country-profiles-langgraph-deployment.onrender.com",
-        // Local Development // SERVER_URL: "http://localhost:8000",
-        // API key for authentication (leave empty if auth is disabled)
-        // Removed because using Clerk for authentication // API_KEY: "rocket_1tLAiTle2d2uUHirF39nHAGtuE34eMTXiVMGk9N5aZs",
-        // Assistant ID from LANGSERVE_GRAPHS in Dockerfile
-        ASSISTANT_ID: "country_profiles",
-        CLERK_TOKEN: null
-    };
-
-    // =========================================================================
-    // Topic randomizer
-    // =========================================================================
-    const SAMPLE_TOPICS = [
-        "What are the dangers that animal advocates face in India?",
-        "Tell me about the state of pig farming in India",
-        "What are key missing data for fish farming in India?",
-        "Animal advocacy differences between southern and northern India",
-        "How should cage-free campaigns be adapted to India?",
-        "What is the current state of dairy welfare regulations in India?",
-        "How does religious and cultural context affect animal advocacy in India?",
-        "What are the biggest challenges for farmed animal sanctuaries in India?",
-        "Tell me about the shrimp aquaculture industry in India",
-        "What corporate campaigns have been most effective for animal welfare in India?"
-    ];
-
-    let _topicIndex = -1;
-
-    function randomizeTopic() {
-        _topicIndex = (_topicIndex + 1) % SAMPLE_TOPICS.length;
-        document.getElementById("topic").value = SAMPLE_TOPICS[_topicIndex];
-        document.getElementById("topic").focus();
-    }
-
-    // =========================================================================
-    // Progress bar
-    // =========================================================================
-    let currentPercent = 0;
-
-    function resetProgressBar() {
-        currentPercent = 0;
-        document.getElementById("progress-fill").style.width = "0%";
-        document.getElementById("progress-fill").className = "progress-fill";
-        document.getElementById("progress-percent").textContent = "0%";
-        document.getElementById("progress-percent").className = "progress-percent";
-        document.getElementById("progress-status-text").textContent = "";
-    }
-
-    function updateProgress(percent, statusText) {
-        if (percent <= currentPercent) return;
-        currentPercent = percent;
-        document.getElementById("progress-fill").style.width = percent + "%";
-        document.getElementById("progress-percent").textContent = percent + "%";
-        if (statusText) {
-            document.getElementById("progress-status-text").textContent = statusText;
-        }
-    }
-
-    function abortProgress(statusText) {
-        document.getElementById("progress-fill").classList.add("aborted");
-        document.getElementById("progress-percent").classList.add("aborted");
-        document.getElementById("progress-percent").textContent = "Aborted";
-        if (statusText) {
-            document.getElementById("progress-status-text").textContent = statusText;
-        }
-    }
-
-
-    // =========================================================================
-    // UI helpers
-    // =========================================================================
-    function show(id) { document.getElementById(id).style.display = "block"; }
-    function hide(id) { document.getElementById(id).style.display = "none"; }
-
-    function showError(msg) {
-        const el = document.getElementById("error-msg");
-        el.textContent = msg;
-        show("error-msg");
-    }
-
-    function hideError() { hide("error-msg"); }
-
-    function addLog(text) {
-        const log = document.getElementById("progress-log");
-        const entry = document.createElement("div");
-        entry.className = "log-entry";
-        entry.textContent = text;
-        log.appendChild(entry);
-        log.scrollTop = log.scrollHeight;
-    }
-
-    function setStatus(text) {
-        document.getElementById("progress-status").textContent = text;
-    }
-
-    function resetForm() {
-        hide("report-section");
-        hide("progress-section");
-        show("form-section");
-        resetProgressBar();
-        document.getElementById("progress-log").innerHTML = "";
-        document.getElementById("report-content").innerHTML = "";
-        document.getElementById("generate-btn").disabled = false;
-        document.getElementById("topic").value = "";
-    }
-
-    // =========================================================================
-    // Markdown to HTML (minimal, no dependencies)
-    // =========================================================================
-    function markdownToHtml(md) {
-        let html = md
-            // Headers
-            .replace(/^##### (.+)$/gm, "<h5>$1</h5>")
-            .replace(/^#### (.+)$/gm, "<h4>$1</h4>")
-            .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-            .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-            .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-            // Horizontal rules
-            .replace(/^---$/gm, "<hr>")
-            .replace(/^\*\*\*$/gm, "<hr>")
-            // Bold and italic
-            .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
-            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-            .replace(/\*(.+?)\*/g, "<em>$1</em>")
-            // Blockquotes
-            .replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
-            // Unordered lists
-            .replace(/^[\-\*] (.+)$/gm, "<li>$1</li>")
-            // Ordered lists
-            .replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
-
-        // Wrap consecutive <li> in <ul>
-        html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
-
-        // Paragraphs: wrap lines that aren't already wrapped in tags
-        html = html.split("\n").map(line => {
-            const trimmed = line.trim();
-            if (!trimmed) return "";
-            if (/^<(h[1-5]|ul|ol|li|hr|blockquote|p)/.test(trimmed)) return trimmed;
-            return `<p>${trimmed}</p>`;
-        }).join("\n");
-
-        // Clean up empty paragraphs
-        html = html.replace(/<p><\/p>/g, "");
-
-        return html;
-    }
-
-    // =========================================================================
-    // API headers
-    // =========================================================================
-    async function getHeaders() {
-        const headers = { "Content-Type": "application/json" };
-        if (typeof clerk !== "undefined" && clerk.session) {
-            const token = await clerk.session.getToken();
-            CONFIG.CLERK_TOKEN = token;
-        }
-        if (CONFIG.CLERK_TOKEN) {
-            headers["Authorization"] = "Bearer " + CONFIG.CLERK_TOKEN;
-        } else if (typeof clerk === "undefined" || !clerk.session) {
-            throw new Error("Your session has expired. Please sign in again.");
-        }
-        return headers;
-    }
-
-
-
-
-
-    // =========================================================================
-    // Create a thread
-    // =========================================================================
-    async function createThread() {
-        const threadId = crypto.randomUUID();
-        const resp = await fetch(`${CONFIG.SERVER_URL}/threads`, {
-            method: "POST",
-            headers: await getHeaders(),
-            body: JSON.stringify({
-                thread_id: threadId,
-                metadata: { user_id: "web-user" },
-                if_exists: "do_nothing"
-            })
-        });
-        if (!resp.ok) {
-            const text = await resp.text();
-            throw new Error(`Failed to create thread (${resp.status}): ${text}`);
-        }
-        const data = await resp.json();
-        return data.thread_id;
-    }
-
-    // =========================================================================
-    // SSE parser (mirrors frontend/api/agent_server.py SSEParser)
-    // =========================================================================
-    class SSEParser {
-        constructor() {
-            this.buffer = "";
-            this.seenMessageIds = new Set();
-        }
-
-        parseChunk(text) {
-            this.buffer += text;
-            const results = [];
-
-            while (this.buffer.includes("\r\n\r\n")) {
-                const idx = this.buffer.indexOf("\r\n\r\n");
-                const eventData = this.buffer.slice(0, idx);
-                this.buffer = this.buffer.slice(idx + 4);
-                const result = this.parseEvent(eventData);
-                if (result) results.push(result);
-            }
-            // Also try \n\n as delimiter (some servers use this)
-            while (this.buffer.includes("\n\n")) {
-                const idx = this.buffer.indexOf("\n\n");
-                const eventData = this.buffer.slice(0, idx);
-                this.buffer = this.buffer.slice(idx + 2);
-                const result = this.parseEvent(eventData);
-                if (result) results.push(result);
-            }
-
-            return results;
-        }
-
-        parseEvent(eventData) {
-            const lines = eventData.trim().split("\n");
-            let eventType = null;
-            let data = null;
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (trimmed.startsWith("event:")) eventType = trimmed.slice(6).trim();
-                else if (trimmed.startsWith("data:")) data = trimmed.slice(5).trim();
-            }
-
-            if (!eventType || !data) return null;
-            return this.processEvent(eventType, data);
-        }
-
-        processEvent(eventType, data) {
-            if (eventType === "error") {
-                return { type: "error", text: data };
-            }
-            if (eventType === "metadata") return null;
-
-            if (eventType === "messages") {
-                try {
-                    const parsed = JSON.parse(data);
-                    let message;
-                    if (Array.isArray(parsed) && parsed.length === 2) {
-                        message = parsed[0];
-                    } else if (typeof parsed === "object" && !Array.isArray(parsed)) {
-                        message = parsed;
-                    }
-                    if (message) return this.processMessage(message);
-                } catch (e) {
-                    // skip malformed JSON
-                }
-            }
-            return null;
-        }
-
-        processMessage(message) {
-            const msgType = message.type;
-
-            if (msgType === "tool") {
-                const msgId = message.id;
-                if (msgId && this.seenMessageIds.has(msgId)) return null;
-                if (msgId) this.seenMessageIds.add(msgId);
-                return { type: "tool", name: message.name || "Unknown" };
-            }
-
-            if (msgType === "AIMessageChunk" || msgType === "ai") {
-                let content = message.content || "";
-                // Gemini/Google models return content as an array of blocks
-                // e.g. [{type: "text", text: "..."}] instead of a plain string
-                if (Array.isArray(content)) {
-                    content = content.map(block =>
-                        typeof block === "string" ? block : (block.text || "")
-                    ).join("");
-                }
-                if (content) return { type: "content", text: content };
-
-                if (message.tool_calls && message.tool_calls.length > 0) {
-                    const tc = message.tool_calls[0];
-                    if (tc.name) return { type: "tool_start", name: tc.name };
-                }
-            }
-
-            return null;
-        }
-    }
-
-    // =========================================================================
-    // Stream the research run
-    // =========================================================================
-    async function streamResearch(threadId, topic, maxAnalysts) {
-        const resp = await fetch(`${CONFIG.SERVER_URL}/threads/${threadId}/runs/stream`, {
-            method: "POST",
-            headers:await getHeaders(),
-            body: JSON.stringify({
-                assistant_id: CONFIG.ASSISTANT_ID,
-                input: {
-                    topic: topic,
-                    max_analysts: maxAnalysts
-                },
-                config: {
-                    recursion_limit: 100
-                },
-                stream_mode: "messages-tuple",
-                stream_subgraphs: false
-            })
-        });
-
-        if (!resp.ok) {
-            const text = await resp.text();
-            throw new Error(`Stream request failed (${resp.status}): ${text}`);
-        }
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        const parser = new SSEParser();
-
-        let fullContent = "";
-        let lastReportContent = "";
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            const events = parser.parseChunk(chunk);
-
-            for (const event of events) {
-                if (event.type === "error") {
-                    addLog("Error: " + event.text);
-                } else if (event.type === "tool_start") {
-                    addLog("Using tool: " + event.name);
-                } else if (event.type === "tool") {
-                    addLog("Tool complete: " + event.name);
-                } else if (event.type === "content") {
-                    // Check for progress markers
-                    const progressMatch = event.text.match(/\[PROGRESS:(\d+)\]\s*(.*)/);
-                    const abortMatch = event.text.match(/\[PROGRESS:ABORTED\]\s*(.*)/);
-
-                    if (abortMatch) {
-                        abortProgress(abortMatch[1]);
-                        addLog(abortMatch[1] || "Research aborted");
-                        // Strip marker, keep remaining content
-                        const afterMarker = event.text.replace(/\[PROGRESS:ABORTED\][^\n]*\n?/, "");
-                        if (afterMarker.trim()) fullContent += afterMarker;
-                    } else if (progressMatch) {
-                        const percent = parseInt(progressMatch[1], 10);
-                        const detail = progressMatch[2];
-                        updateProgress(percent, detail);
-                        if (detail) addLog(detail);
-                        // Strip marker, keep remaining content (e.g. the report text)
-                        const afterMarker = event.text.replace(/\[PROGRESS:\d+\][^\n]*\n?/, "");
-                        if (afterMarker.trim()) fullContent += afterMarker;
-                    } else {
-                        fullContent += event.text;
-
-                        // Existing phase detection (kept as fallback)
-                        if (event.text.includes("Report Finalized")) {
-                            setStatus("Report finalized, restructuring...");
-                            addLog("Report finalized");
-                        } else if (event.text.includes("Structured Profile Complete")) {
-                            setStatus("Structured profile complete!");
-                            addLog("Structured profile generated");
-                        } else if (event.text.includes("ABORTED")) {
-                            setStatus("Research aborted - not enough data");
-                            addLog("Aborted: not enough internal knowledge");
-                        }
-                    }
-
-                    lastReportContent = fullContent;
-                }
-            }
-        }
-
-        return lastReportContent;
-    }
-
-    // =========================================================================
-    // Extract the best report from the streamed content
-    // =========================================================================
-    function extractReport(fullContent) {
-        // The graph sends two key messages:
-        // 1. "### Report Finalized\n\n{report}"
-        // 2. "### Structured Profile Complete\n\n{structured_report}"
-        // We want the structured report if available, otherwise the finalized report
-
-        const structuredMarker = "### 📊 Structured Profile Complete";
-        const finalizedMarker = "### ✅ Report Finalized";
-
-        let report = "";
-
-        const structuredIdx = fullContent.lastIndexOf(structuredMarker);
-        if (structuredIdx !== -1) {
-            report = fullContent.slice(structuredIdx + structuredMarker.length).trim();
-        } else {
-            const finalizedIdx = fullContent.lastIndexOf(finalizedMarker);
-            if (finalizedIdx !== -1) {
-                report = fullContent.slice(finalizedIdx + finalizedMarker.length).trim();
-            }
-        }
-
-        // If we couldn't find markers, use the full content as fallback
-        if (!report && fullContent.length > 100) {
-            report = fullContent;
-        }
-
-        return report;
-    }
-
-    // =========================================================================
-    // Main flow
-    // =========================================================================
-    async function startResearch() {
-        hideError();
-
-        const topic = document.getElementById("topic").value.trim();
-        const maxAnalysts = parseInt(document.getElementById("max-analysts").value, 10);
-
-        if (!topic) {
-            showError("Please enter a research topic.");
-            return;
-        }
-        if (isNaN(maxAnalysts) || maxAnalysts < 1 || maxAnalysts > 6) {
-            showError("Number of analysts must be between 1 and 6.");
-            return;
-        }
-
-        document.getElementById("generate-btn").disabled = true;
-        hide("form-section");
-        show("progress-section");
-        resetProgressBar();
-        setStatus("Creating research thread...");
-        addLog("Topic: " + topic);
-        addLog("Analysts: " + maxAnalysts);
-
-        try {
-            const threadId = await createThread();
-            addLog("Thread created: " + threadId.slice(0, 8) + "...");
-            setStatus("Running research pipeline...");
-
-            const fullContent = await streamResearch(threadId, topic, maxAnalysts);
-
-            // Extract and display the report
-            const report = extractReport(fullContent);
-            if (report) {
-                document.getElementById("report-content").innerHTML = markdownToHtml(report);
-                hide("progress-section");
-                show("report-section");
-            } else {
-                setStatus("Research complete (no report generated)");
-                document.getElementById("spinner").style.display = "none";
-                addLog("No report content received. The internal vaults may not have enough data on this topic.");
-            }
-
-        } catch (err) {
-            console.error(err);
-            setStatus("Error occurred");
-            document.getElementById("spinner").style.display = "none";
-
-            if (err.message.includes("401") || err.message.includes("session has expired")) {
-                showError("Your session has expired. Please sign in again.");
-                document.getElementById("sign-in").style.display = "flex";
-                hide("form-section");
-                if (typeof clerk !== "undefined") {
-                    clerk.mountSignIn(document.getElementById("sign-in"));
-                }
-            } else {
-                showError(err.message);
-                show("form-section");
-            }
-            document.getElementById("generate-btn").disabled = false;
-        }
-    }
-    </script>
-
+    <!-- ── Scripts ── -->
+    <script type="module" src="/src/app.js"></script>
     <script type="module" src="/src/main.js"></script>
+
 </body>
 </html>

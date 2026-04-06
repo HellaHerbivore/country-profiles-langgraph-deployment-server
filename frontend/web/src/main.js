@@ -24,29 +24,27 @@ await clerk.load({
   ui: { ClerkUI: window.__internal_ClerkUICtor },
 })
 
-// Find the different parts of your web page
+// DOM references for new layout
 const userBox = document.getElementById('user-button')
 const signInBox = document.getElementById('sign-in')
-const formSection = document.getElementById('form-section')
+const bottomBar = document.querySelector('.bottom-bar')
 
-// Check if the user is logged in
+function handleSessionExpired() {
+  window.CONFIG.CLERK_TOKEN = null
+  bottomBar.style.display = 'none'
+  signInBox.style.display = 'flex'
+  clerk.unmountUserButton(userBox)
+  clerk.mountSignIn(signInBox)
+}
+
 if (clerk.isSignedIn) {
   clerk.mountUserButton(userBox)
-  formSection.style.display = 'block'
+  bottomBar.style.display = 'flex'
   signInBox.style.display = 'none'
-
-  function handleSessionExpired() {
-    CONFIG.CLERK_TOKEN = null
-    formSection.style.display = 'none'
-    signInBox.style.display = 'flex'
-    clerk.unmountUserButton(userBox)
-    clerk.mountSignIn(signInBox)
-  }
-
 
   // Get the session token and pass it to CONFIG for API requests
   const token = await clerk.session.getToken()
-  CONFIG.CLERK_TOKEN = token
+  window.CONFIG.CLERK_TOKEN = token
 
   const tokenRefreshInterval = setInterval(async () => {
     try {
@@ -55,7 +53,7 @@ if (clerk.isSignedIn) {
         handleSessionExpired()
         return
       }
-      CONFIG.CLERK_TOKEN = await clerk.session.getToken()
+      window.CONFIG.CLERK_TOKEN = await clerk.session.getToken()
     } catch (e) {
       clearInterval(tokenRefreshInterval)
       handleSessionExpired()
@@ -69,7 +67,7 @@ if (clerk.isSignedIn) {
       return
     }
     try {
-      CONFIG.CLERK_TOKEN = await clerk.session.getToken()
+      window.CONFIG.CLERK_TOKEN = await clerk.session.getToken()
     } catch (e) {
       handleSessionExpired()
     }
@@ -81,8 +79,8 @@ if (clerk.isSignedIn) {
     }
   })
 
-
 } else {
   clerk.mountSignIn(signInBox)
-  formSection.style.display = 'none'
+  signInBox.style.display = 'flex'
+  bottomBar.style.display = 'none'
 }
