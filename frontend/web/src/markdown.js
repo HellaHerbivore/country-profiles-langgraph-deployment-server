@@ -17,6 +17,8 @@ export function markdownToHtml(md) {
         .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.+?)\*/g, "<em>$1</em>")
+        // Inline source citations [filename.pdf] → colored span
+        .replace(/(\[[^\]]+?\.\w{2,4}\])/g, '<span class="source-cite">$1</span>')
         // Blockquotes
         .replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
         // Unordered lists

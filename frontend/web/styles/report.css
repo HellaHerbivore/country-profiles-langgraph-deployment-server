@@ -112,6 +112,12 @@
   color: var(--on-surface-variant);
 }
 
+/* ── Source Citations ── */
+#report-content .source-cite {
+  color: #D05340;
+  font-size: 0.9em;
+}
+
 /* ── Blockquotes ── */
 #report-content blockquote {
   border-left: 3px solid var(--secondary-container);
