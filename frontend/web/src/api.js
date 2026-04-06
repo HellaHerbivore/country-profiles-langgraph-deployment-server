@@ -92,6 +92,15 @@ export async function streamResearch(threadId, topic, maxAnalysts, callbacks = {
             } else if (event.type === "tool") {
                 callbacks.onLog?.("Tool complete: " + event.name);
             } else if (event.type === "content") {
+                // Check for layers briefing marker
+                const layersMatch = event.text.match(/\[LAYERS_BRIEFING\]([\s\S]*)/);
+                if (layersMatch) {
+                    callbacks.onLayersBriefing?.(layersMatch[1]);
+                    callbacks.onLog?.("Layers briefing received");
+                    // Don't add layers JSON to fullContent — it's not part of the report
+                    continue;
+                }
+
                 const progressMatch = event.text.match(/\[PROGRESS:(\d+)\]\s*(.*)/);
                 const abortMatch = event.text.match(/\[PROGRESS:ABORTED\]\s*(.*)/);
 

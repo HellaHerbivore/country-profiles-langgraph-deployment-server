@@ -87,21 +87,76 @@ function setStatus(text) {
     $("progress-status").textContent = text;
 }
 
-// ── State Transitions ──
-function showWelcome() {
-    $("welcome-state").style.display = "flex";
-    $("report-loading").style.display = "none";
-    $("report-surface").classList.remove("visible");
+// ── Layers Panel ──
+const LAYERS_PLACEHOLDER = {
+    headline: "Enter a research topic to see how change moves through the macro, meso, and micro layers.",
+    macro: "Policy, legal, and regulatory forces that shape the national landscape. Enter a topic to see the structural levers at play.",
+    meso: "Institutional actors \u2014 industry bodies, retailers, cooperatives, NGOs \u2014 that translate policy into practice. Enter a topic to see who holds power at this level.",
+    micro: "Cultural, economic, and behavioral dynamics at the level of producers, consumers, and communities. Enter a topic to see the on-the-ground realities."
+};
+
+function showLayersShimmer() {
+    $("layers-headline").classList.add("loading");
+    ["layer-macro-body", "layer-meso-body", "layer-micro-body"].forEach(id => {
+        $(id).innerHTML =
+            '<div class="layer-shimmer"><span></span><span></span><span></span></div>';
+    });
 }
 
+function populateLayers(jsonStr) {
+    try {
+        const data = JSON.parse(jsonStr);
+        $("layers-headline").textContent = data.synthesis || "";
+        $("layers-headline").classList.remove("loading");
+
+        const boldify = (text) => text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+        fadeIn("layer-macro-body", boldify(data.macro || ""));
+        fadeIn("layer-meso-body", boldify(data.meso || ""));
+        fadeIn("layer-micro-body", boldify(data.micro || ""));
+    } catch (e) {
+        console.error("Failed to parse layers briefing:", e);
+        // On parse failure, remove shimmer and show a fallback
+        $("layers-headline").classList.remove("loading");
+        $("layers-headline").textContent = "Layers briefing could not be parsed.";
+    }
+}
+
+function fadeIn(elementId, html) {
+    const el = $(elementId);
+    el.style.opacity = "0";
+    el.innerHTML = html;
+    requestAnimationFrame(() => {
+        el.style.transition = "opacity 250ms ease";
+        el.style.opacity = "1";
+    });
+}
+
+function resetLayers() {
+    $("layers-headline").classList.remove("loading");
+    $("layers-headline").textContent = LAYERS_PLACEHOLDER.headline;
+    $("layer-macro-body").style.opacity = "1";
+    $("layer-macro-body").innerHTML = LAYERS_PLACEHOLDER.macro;
+    $("layer-meso-body").style.opacity = "1";
+    $("layer-meso-body").innerHTML = LAYERS_PLACEHOLDER.meso;
+    $("layer-micro-body").style.opacity = "1";
+    $("layer-micro-body").innerHTML = LAYERS_PLACEHOLDER.micro;
+}
+
+// ── State Transitions ──
+// Layers panel is always visible — no show/hide needed for it.
+// Only loading spinner and report surface toggle.
+
 function showLoading() {
-    $("welcome-state").style.display = "none";
     $("report-loading").classList.add("visible");
     $("report-surface").classList.remove("visible");
 }
 
+function hideLoading() {
+    $("report-loading").classList.remove("visible");
+}
+
 function showReport() {
-    $("welcome-state").style.display = "none";
     $("report-loading").classList.remove("visible");
     $("report-surface").classList.add("visible");
 }
@@ -127,7 +182,9 @@ window.toggleSidePanel = function () {
 
 // ── Reset Form ──
 window.resetForm = function () {
-    showWelcome();
+    resetLayers();
+    hideLoading();
+    $("report-surface").classList.remove("visible");
     resetSidePanel();
     resetProgressBar();
     $("report-content").innerHTML = "";
@@ -162,7 +219,8 @@ window.startResearch = async function () {
     $("meta-topic").textContent = topic;
     $("meta-analysts").textContent = maxAnalysts;
 
-    // Transition UI
+    // Transition UI — shimmer cards + show loading below + activate side panel
+    showLayersShimmer();
     showLoading();
     activateSidePanel();
     resetProgressBar();
@@ -180,7 +238,8 @@ window.startResearch = async function () {
             onAbort: abortProgress,
             onLog: addLog,
             onStatus: setStatus,
-            onContent: () => {} // could do live preview here
+            onLayersBriefing: populateLayers,
+            onContent: () => {}
         });
 
         const report = extractReport(fullContent);
@@ -193,7 +252,7 @@ window.startResearch = async function () {
             setStatus("Research complete (no report generated)");
             $("spinner").style.display = "none";
             addLog("No report content received. The internal vaults may not have enough data on this topic.");
-            showWelcome();
+            hideLoading();
         }
 
         // Re-enable inputs for new research
@@ -219,7 +278,7 @@ window.startResearch = async function () {
         $("generate-btn").disabled = false;
         $("topic").disabled = false;
         $("max-analysts").disabled = false;
-        showWelcome();
+        hideLoading();
     }
 };
 

@@ -34,15 +34,33 @@
 
             <div id="error-banner" class="error-banner"></div>
 
-            <!-- Welcome State -->
-            <div id="welcome-state" class="welcome-state">
-                <div class="welcome-icon">&#9998;</div>
-                <h2 class="welcome-title">Strategic Research on Animal Advocacy</h2>
-                <p class="welcome-subtitle">
-                    Enter a research topic below to generate an in-depth country profile
-                    briefing powered by multi-analyst intelligence.
-                </p>
-            </div>
+            <!-- Layers Panel (always visible) -->
+            <section id="layers-panel" class="layers-panel">
+                <p class="layers-eyebrow">HOW CHANGE MOVES THROUGH THE LAYERS</p>
+                <h2 class="layers-headline" id="layers-headline">
+                    Enter a research topic to see how change moves through the macro, meso, and micro layers.
+                </h2>
+                <div class="layers-grid">
+                    <div class="layer-card" id="layer-macro">
+                        <span class="layer-pill layer-pill--macro">MACRO</span>
+                        <div class="layer-body" id="layer-macro-body">
+                            Policy, legal, and regulatory forces that shape the national landscape. Enter a topic to see the structural levers at play.
+                        </div>
+                    </div>
+                    <div class="layer-card" id="layer-meso">
+                        <span class="layer-pill layer-pill--meso">MESO</span>
+                        <div class="layer-body" id="layer-meso-body">
+                            Institutional actors — industry bodies, retailers, cooperatives, NGOs — that translate policy into practice. Enter a topic to see who holds power at this level.
+                        </div>
+                    </div>
+                    <div class="layer-card" id="layer-micro">
+                        <span class="layer-pill layer-pill--micro">MICRO</span>
+                        <div class="layer-body" id="layer-micro-body">
+                            Cultural, economic, and behavioral dynamics at the level of producers, consumers, and communities. Enter a topic to see the on-the-ground realities.
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <!-- Loading State -->
             <div id="report-loading" class="report-loading">
