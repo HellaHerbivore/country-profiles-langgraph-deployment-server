@@ -35,14 +35,53 @@ if (clerk.isSignedIn) {
   formSection.style.display = 'block'
   signInBox.style.display = 'none'
 
+  function handleSessionExpired() {
+    CONFIG.CLERK_TOKEN = null
+    formSection.style.display = 'none'
+    signInBox.style.display = 'flex'
+    clerk.unmountUserButton(userBox)
+    clerk.mountSignIn(signInBox)
+  }
+
+
   // Get the session token and pass it to CONFIG for API requests
   const token = await clerk.session.getToken()
   CONFIG.CLERK_TOKEN = token
 
-  // Refresh the token every 50 seconds (Clerk tokens expire after 60s)
-  setInterval(async () => {
-    CONFIG.CLERK_TOKEN = await clerk.session.getToken()
+  const tokenRefreshInterval = setInterval(async () => {
+    try {
+      if (!clerk.session) {
+        clearInterval(tokenRefreshInterval)
+        handleSessionExpired()
+        return
+      }
+      CONFIG.CLERK_TOKEN = await clerk.session.getToken()
+    } catch (e) {
+      clearInterval(tokenRefreshInterval)
+      handleSessionExpired()
+    }
   }, 50000)
+
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return
+    if (!clerk.session) {
+      handleSessionExpired()
+      return
+    }
+    try {
+      CONFIG.CLERK_TOKEN = await clerk.session.getToken()
+    } catch (e) {
+      handleSessionExpired()
+    }
+  })
+
+  clerk.addListener(({ session }) => {
+    if (!session) {
+      handleSessionExpired()
+    }
+  })
+
+
 } else {
   clerk.mountSignIn(signInBox)
   formSection.style.display = 'none'
