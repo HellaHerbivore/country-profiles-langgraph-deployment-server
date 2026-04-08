@@ -13,6 +13,8 @@ from server.middleware.auth import APIKeyAuthMiddleware
 from server.middleware.clerk_auth import ClerkAuthMiddleware
 from server.middleware.cors import add_cors_middleware
 from server.proxy import LangGraphProxyMiddleware
+from server.models import create_tables, get_session_factory
+from server.feedback_routes import feedback_routes
 
 logger = logging.getLogger(__name__)
 
@@ -20,30 +22,28 @@ logger = logging.getLogger(__name__)
 def create_proxy_app(config: ServerConfig) -> Starlette:
     """
     Create the proxy application with all middleware configured.
-    
-    This is the main application factory that assembles:
-    - CORS middleware (if configured)
-    - Authentication middleware
-    - LangGraph proxy middleware
-    
-    Args:
-        config: Server configuration containing all settings
-        
-    Returns:
-        Starlette: Configured application ready to serve
     """
     logger.info("Creating proxy application...")
-    
-    # Create the base app
-    app = Starlette()
-    
+
+    # Initialize the testing database
+    db_path = getattr(config, "testing_db_path", None) or "sqlite:///testing_data.db"
+    create_tables(db_path)
+    db_session_factory = get_session_factory(db_path)
+
+    # Create the base app with feedback/admin routes
+    app = Starlette(routes=feedback_routes)
+
     # Add middleware in reverse order (last added runs first)
-    # Order: Request → CORS → Auth → Proxy → LangGraph Server
-    
+    # Order: Request -> CORS -> Auth -> Proxy -> LangGraph Server
+
     # 1. Add proxy middleware first (runs last - forwards to LangGraph)
-    app.add_middleware(LangGraphProxyMiddleware, langgraph_url=config.langgraph_url)
+    app.add_middleware(
+        LangGraphProxyMiddleware,
+        langgraph_url=config.langgraph_url,
+        db_session_factory=db_session_factory,
+    )
     logger.info(f"Added LangGraph proxy middleware for {config.langgraph_url}")
-    
+
     # 2. Add authentication middleware second (runs second - validates API keys)
     if config.auth_type == "clerk":
         app.add_middleware(ClerkAuthMiddleware, config=config)
@@ -51,24 +51,16 @@ def create_proxy_app(config: ServerConfig) -> Starlette:
     else:
         app.add_middleware(APIKeyAuthMiddleware, config=config)
         logger.info(f"Added API key authentication middleware (required: {config.api_key_required})")
-    
+
     # 3. Add CORS middleware last (runs first - handles preflight requests)
     add_cors_middleware(app, config)
-    
+
     logger.info("Proxy application created successfully")
     return app
 
 
 def get_middleware_info(config: ServerConfig) -> dict:
-    """
-    Get information about the middleware configuration.
-    
-    Args:
-        config: Server configuration
-        
-    Returns:
-        dict: Middleware configuration summary
-    """
+    """Get information about the middleware configuration."""
     return {
         "middleware_stack": [
             {
@@ -79,7 +71,7 @@ def get_middleware_info(config: ServerConfig) -> dict:
                 }
             },
             {
-                "name": "Authentication", 
+                "name": "Authentication",
                 "enabled": config.api_key_required,
                 "config": {
                     "api_key_required": config.api_key_required

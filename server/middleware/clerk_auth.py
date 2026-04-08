@@ -119,9 +119,13 @@ class ClerkAuthMiddleware(BaseHTTPMiddleware):
         internal_prefixes = [
             "/_internal/",
             "/api/v1/health",
+            "/api/admin",
+            "/api/feedback/export",
+            "/api/query-logs/export",
         ]
         return (path in internal_paths or
                 any(path.startswith(prefix) for prefix in internal_prefixes))
+
 
     def _extract_bearer_token(self, request: Request) -> Optional[str]:
         """Pull the token out of 'Authorization: Bearer <token>'."""

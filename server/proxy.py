@@ -5,7 +5,9 @@ This module handles forwarding requests to the LangGraph server,
 including support for streaming responses and error handling.
 """
 
+import json
 import logging
+import re
 from typing import Dict, Optional
 
 import httpx
@@ -14,6 +16,7 @@ from starlette.responses import Response, JSONResponse, StreamingResponse
 from starlette.requests import Request
 
 from server.health import handle_health_check
+from server.models import QueryLog
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +29,10 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
     handling and health check routing.
     """
     
-    def __init__(self, app, langgraph_url: str):
+    def __init__(self, app, langgraph_url: str, db_session_factory=None):
         super().__init__(app)
         self.langgraph_url = langgraph_url
+        self.db_session_factory = db_session_factory
         self.client = httpx.AsyncClient(timeout=300.0)  # 5 minute timeout for long requests
         logger.info(f"LangGraph proxy middleware initialized for {langgraph_url}")
     
@@ -43,6 +47,10 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
         # Handle health checks locally (don't forward to LangGraph)
         if request.url.path in ["/ok", "/health", "/health-detailed"]:
             return await handle_health_check(request, self.langgraph_url)
+        
+        # Don't proxy our own API endpoints — let Starlette routes handle them
+        if request.url.path.startswith("/api/"):
+            return await call_next(request)
         
         # Forward all other requests to LangGraph server
         try:
@@ -70,12 +78,6 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
     async def _forward_request(self, request: Request) -> Response:
         """
         Forward a request to the LangGraph server.
-        
-        Args:
-            request: The incoming request to forward
-            
-        Returns:
-            Response: The response from LangGraph server
         """
         # Build the target URL
         target_url = f"{self.langgraph_url}{request.url.path}"
@@ -86,6 +88,10 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
         body = None
         if request.method in ["POST", "PUT", "PATCH"]:
             body = await request.body()
+
+        # Log queries for research runs
+        if request.method == "POST" and body:
+            self._log_query(request, body)
 
         # Forward headers (excluding host)
         headers = self._prepare_headers(request)
@@ -99,15 +105,48 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
         else:
             return await self._handle_regular_request(request.method, target_url, headers, body)
 
+    def _log_query(self, request: Request, body: bytes):
+        """
+        Log research queries to the database. Failures here never break the proxy.
+        """
+        if not self.db_session_factory:
+            return
+
+        try:
+            path = request.url.path
+            match = re.search(r"/threads/([^/]+)/runs", path)
+            if not match:
+                return
+
+            thread_id = match.group(1)
+            data = json.loads(body)
+            input_data = data.get("input", {})
+            topic = input_data.get("topic")
+            if not topic:
+                return
+
+            user_id = getattr(request.state, "user_id", "anonymous")
+
+            session = self.db_session_factory()
+            try:
+                log = QueryLog(
+                    user_id=user_id,
+                    topic=topic,
+                    max_analysts=input_data.get("max_analysts"),
+                    thread_id=thread_id,
+                )
+                session.add(log)
+                session.commit()
+                logger.info(f"Logged query: user={user_id}, topic={topic[:50]}")
+            finally:
+                session.close()
+
+        except Exception as e:
+            logger.warning(f"Failed to log query (non-fatal): {e}")
+
     def _prepare_headers(self, request: Request) -> Dict[str, str]:
         """
         Prepare headers for forwarding, removing problematic ones.
-        
-        Args:
-            request: The incoming request
-            
-        Returns:
-            Dict[str, str]: Cleaned headers for forwarding
         """
         headers = dict(request.headers)
         headers.pop("host", None)  # Remove host header to avoid conflicts
@@ -116,12 +155,6 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
     def _is_streaming_request(self, request: Request) -> bool:
         """
         Determine if this is a streaming request.
-        
-        Args:
-            request: The incoming request
-            
-        Returns:
-            bool: True if this appears to be a streaming request
         """
         return (
             request.url.path.endswith("/stream") or
@@ -132,15 +165,6 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
     async def _handle_streaming_request(self, method: str, url: str, headers: Dict[str, str], body: Optional[bytes]) -> StreamingResponse:
         """
         Handle a streaming request to LangGraph server.
-        
-        Args:
-            method: HTTP method
-            url: Target URL
-            headers: Request headers
-            body: Request body
-            
-        Returns:
-            StreamingResponse: Streaming response from LangGraph
         """
         logger.debug(f"Handling streaming request to {url}")
 
@@ -177,15 +201,6 @@ class LangGraphProxyMiddleware(BaseHTTPMiddleware):
     async def _handle_regular_request(self, method: str, url: str, headers: Dict[str, str], body: Optional[bytes]) -> Response:
         """
         Handle a regular (non-streaming) request to LangGraph server.
-        
-        Args:
-            method: HTTP method
-            url: Target URL
-            headers: Request headers
-            body: Request body
-            
-        Returns:
-            Response: Response from LangGraph
         """
         response = await self.client.request(
             method=method,
