@@ -4,7 +4,6 @@
 
 import { CONFIG, getHeaders } from './api.js';
 
-let selectedType = 'general';
 let panelOpen = false;
 
 // ── Toggle Panel ──
@@ -14,17 +13,6 @@ window.toggleFeedback = function () {
     document.getElementById('feedback-backdrop').classList.toggle('visible', panelOpen);
     document.getElementById('feedback-fab').classList.toggle('hidden', panelOpen);
 };
-
-// ── Type Selector ──
-function initTypeButtons() {
-    document.querySelectorAll('.feedback-type-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.feedback-type-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            selectedType = btn.dataset.type;
-        });
-    });
-}
 
 // ── Submit Feedback ──
 window.submitFeedback = async function () {
@@ -56,7 +44,7 @@ window.submitFeedback = async function () {
             headers: await getHeaders(),
             body: JSON.stringify({
                 message,
-                feedback_type: selectedType,
+                feedback_type: 'general',
                 page_context: pageContext,
             }),
         });
@@ -83,7 +71,3 @@ window.submitFeedback = async function () {
     }
 };
 
-// ── Init on DOM ready ──
-document.addEventListener('DOMContentLoaded', () => {
-    initTypeButtons();
-});
