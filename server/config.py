@@ -48,6 +48,10 @@ class ServerConfig:
     # Database
     database_uri: Optional[str] = field(default=None)
     
+    # Testing/feedback database
+    testing_db_path: str = field(default="sqlite:///testing_data.db")
+
+    
     # LangSmith Integration
     langsmith_api_key: Optional[str] = field(default=None)
     langsmith_tracing: bool = field(default=False)
@@ -160,6 +164,8 @@ def load_config() -> ServerConfig:
             
             # Database
             database_uri=_get_str_env("DATABASE_URI"),
+            testing_db_path=_get_str_env_required("TESTING_DB_PATH", "sqlite:///testing_data.db"),
+
             
             # LangSmith Integration
             langsmith_api_key=_get_str_env("LANGSMITH_API_KEY"),
