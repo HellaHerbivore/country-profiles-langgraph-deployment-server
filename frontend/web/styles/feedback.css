@@ -204,7 +204,8 @@
     }
 
     .feedback-fab {
-        right: 16px;
+        right: auto;
+        left: 16px;
         bottom: calc(var(--bottom-bar-height, 72px) + 12px);
         padding: 0.5rem 1rem;
         font-size: 0.75rem;
