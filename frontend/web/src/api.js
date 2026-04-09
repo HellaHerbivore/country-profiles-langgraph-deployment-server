@@ -31,7 +31,7 @@ export async function getHeaders() {
 // Returns true if server is reachable, false if timed out.
 export async function wakeUpServer(onStatusChange, options = {}) {
     const {
-        maxAttempts = 30,
+        maxAttempts = 60,
         initialDelay = 2000,
         maxDelay = 5000,
     } = options;

@@ -98,7 +98,7 @@ class LangGraphServerManager:
             logger.error(f"Failed to start LangGraph server: {e}")
             return False
     
-    async def wait_for_ready(self, max_wait: int = 90) -> bool:
+    async def wait_for_ready(self, max_wait: int = 180) -> bool:
         """
         Wait for the LangGraph server to be ready to accept requests.
         
