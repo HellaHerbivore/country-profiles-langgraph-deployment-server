@@ -230,14 +230,10 @@ window.startResearch = async function () {
 
     try {
         // ── Pre-flight: verify Clerk session before waking server ──
-        if (typeof clerk === 'undefined' || !clerk.session) {
+        if (!window.CONFIG.CLERK_TOKEN) {
             throw new Error('Your session has expired. Please sign in again.');
         }
-        try {
-            await clerk.session.getToken();
-        } catch {
-            throw new Error('Your session has expired. Please sign in again.');
-        }
+
 
         // ── Wake up server if Render has spun down ──
         const serverReady = await wakeUpServer((statusText) => {

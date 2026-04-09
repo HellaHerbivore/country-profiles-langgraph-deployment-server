@@ -77,13 +77,14 @@ export async function wakeUpServer(onStatusChange, options = {}) {
 // Force-refresh the Clerk JWT so the 60-second clock starts fresh.
 // Returns the token, or null if the Clerk session is gone.
 export async function freshToken() {
-    if (typeof clerk !== 'undefined' && clerk.session) {
-        const token = await clerk.session.getToken({ skipCache: true });
+    if (window.__clerk && window.__clerk.session) {
+        const token = await window.__clerk.session.getToken({ skipCache: true });
         CONFIG.CLERK_TOKEN = token;
         return token;
     }
     return null;
 }
+
 
 // ── Retry Wrapper ──
 // Handles 401 (token refresh + retry), 503 (LangGraph not ready), and network errors.
