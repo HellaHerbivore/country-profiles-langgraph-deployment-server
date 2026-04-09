@@ -6,7 +6,7 @@ import { SSEParser } from './sse-parser.js';
 
 // ── Configuration ──
 export const CONFIG = {
-    SERVER_URL: "https://country-profiles-langgraph-deployment.onrender.com",
+    SERVER_URL: import.meta.env.VITE_SERVER_URL || "https://country-profiles-langgraph-deployment.onrender.com",
     ASSISTANT_ID: "country_profiles",
     CLERK_TOKEN: null
 };
