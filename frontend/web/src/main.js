@@ -24,6 +24,9 @@ await clerk.load({
   ui: { ClerkUI: window.__internal_ClerkUICtor },
 })
 
+window.__clerk = clerk
+
+
 // DOM references for new layout
 const userBox = document.getElementById('user-button')
 const signInBox = document.getElementById('sign-in')
