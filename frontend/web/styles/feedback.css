@@ -215,3 +215,10 @@
 body.signed-out .feedback-fab {
     bottom: 16px;
 }
+
+/* Extra-small: bottom bar wraps to two rows */
+@media (max-width: 480px) {
+    .feedback-fab {
+        bottom: calc(120px + 16px);
+    }
+}
