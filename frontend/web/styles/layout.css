@@ -153,6 +153,11 @@ body.signed-out .main-area {
   max-height: calc(100vh - var(--nav-height));
 }
 
+/* ── Side Panel Close Button (mobile only) ── */
+.side-panel-close {
+  display: none;
+}
+
 /* ── Mobile Side Panel Toggle ── */
 .side-panel-toggle {
   display: none;
@@ -211,6 +216,25 @@ body.signed-out .main-area {
 
   .side-panel.open {
     transform: translateX(0);
+  }
+
+  .side-panel-close {
+    display: block;
+    position: absolute;
+    top: var(--space-sm);
+    right: var(--space-sm);
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--on-surface-variant);
+    cursor: pointer;
+    padding: var(--space-xs);
+    line-height: 1;
+    z-index: 1;
+  }
+
+  .side-panel-close:hover {
+    color: var(--on-surface);
   }
 
   .side-panel-toggle {
