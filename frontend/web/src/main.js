@@ -35,6 +35,7 @@ const bottomBar = document.querySelector('.bottom-bar')
 function handleSessionExpired() {
   window.CONFIG.CLERK_TOKEN = null
   bottomBar.style.display = 'none'
+  document.body.classList.add('signed-out')
   signInBox.style.display = 'flex'
   clerk.unmountUserButton(userBox)
   clerk.mountSignIn(signInBox)
@@ -43,6 +44,7 @@ function handleSessionExpired() {
 if (clerk.isSignedIn) {
   clerk.mountUserButton(userBox)
   bottomBar.style.display = 'flex'
+  document.body.classList.remove('signed-out')
   signInBox.style.display = 'none'
 
   // Get the session token and pass it to CONFIG for API requests
@@ -86,4 +88,5 @@ if (clerk.isSignedIn) {
   clerk.mountSignIn(signInBox)
   signInBox.style.display = 'flex'
   bottomBar.style.display = 'none'
+  document.body.classList.add('signed-out')
 }

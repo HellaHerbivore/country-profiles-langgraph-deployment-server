@@ -1,7 +1,7 @@
 /* ── Feedback FAB ── */
 .feedback-fab {
     position: fixed;
-    bottom: calc(var(--bottom-bar-h, 72px) + 16px);
+    bottom: calc(var(--bottom-bar-height, 72px) + 16px);
     right: 24px;
     z-index: 95;
     background: linear-gradient(135deg, var(--primary, #00081e), #0a1a3a);
@@ -205,8 +205,13 @@
 
     .feedback-fab {
         right: 16px;
-        bottom: calc(var(--bottom-bar-h, 72px) + 12px);
+        bottom: calc(var(--bottom-bar-height, 72px) + 12px);
         padding: 0.5rem 1rem;
         font-size: 0.75rem;
     }
+}
+
+/* When signed out, bottom bar is hidden */
+body.signed-out .feedback-fab {
+    bottom: 16px;
 }

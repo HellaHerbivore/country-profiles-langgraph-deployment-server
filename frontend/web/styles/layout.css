@@ -138,6 +138,19 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 300px;
+  flex: 1;
+}
+
+/* When signed out, remove bottom-bar space from layout calculations */
+body.signed-out .content-shell {
+  margin-bottom: 0;
+  min-height: calc(100vh - var(--nav-height));
+}
+
+body.signed-out .main-area {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--nav-height));
 }
 
 /* ── Mobile Side Panel Toggle ── */
@@ -219,5 +232,38 @@ body {
 
   .analyst-control.mobile-visible {
     display: flex;
+  }
+}
+
+/* Extra-small (narrow phones) */
+@media (max-width: 480px) {
+  .bottom-bar {
+    height: auto;
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .bottom-bar-inner {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .bottom-bar-inner .input-text {
+    flex: 1 1 100%;
+  }
+
+  .bottom-bar-inner .btn-primary {
+    flex: 1 1 auto;
+  }
+
+  .content-shell {
+    margin-bottom: 120px;
+  }
+
+  .main-area {
+    max-height: calc(100vh - var(--nav-height) - 120px);
+  }
+
+  .side-panel-toggle {
+    bottom: calc(120px + var(--space-md));
   }
 }
