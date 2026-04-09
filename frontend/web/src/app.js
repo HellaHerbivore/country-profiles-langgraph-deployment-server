@@ -2,7 +2,7 @@
 // App — UI orchestration for "The Digital Curator"
 // ==========================================================================
 
-import { CONFIG, createThread, streamResearch, extractReport } from './api.js';
+import { CONFIG, createThread, streamResearch, extractReport, wakeUpServer, freshToken, withRetry } from './api.js';
 import { markdownToHtml } from './markdown.js';
 
 // ── Sample Topics ──
@@ -229,40 +229,57 @@ window.startResearch = async function () {
     addLog("Analysts: " + maxAnalysts);
 
     try {
-        const threadId = await createThread();
-        addLog("Thread created: " + threadId.slice(0, 8) + "...");
-        setStatus("Running research pipeline...");
-
-        const fullContent = await streamResearch(threadId, topic, maxAnalysts, {
-            onProgress: updateProgress,
-            onAbort: abortProgress,
-            onLog: addLog,
-            onStatus: setStatus,
-            onLayersBriefing: populateLayers,
-            onContent: () => {}
-        });
-
-        const report = extractReport(fullContent);
-        if (report) {
-            $("report-content").innerHTML = markdownToHtml(report);
-            showReport();
-            setStatus("Research complete");
-            $("spinner").style.display = "none";
-        } else {
-            setStatus("Research complete (no report generated)");
-            $("spinner").style.display = "none";
-            addLog("No report content received. The internal vaults may not have enough data on this topic.");
-            hideLoading();
+        // ── Pre-flight: verify Clerk session before waking server ──
+        if (typeof clerk === 'undefined' || !clerk.session) {
+            throw new Error('Your session has expired. Please sign in again.');
+        }
+        try {
+            await clerk.session.getToken();
+        } catch {
+            throw new Error('Your session has expired. Please sign in again.');
         }
 
-        // Re-enable inputs for new research
-        $("topic").disabled = false;
-        $("max-analysts").disabled = false;
-        $("generate-btn").disabled = false;
+        // ── Wake up server if Render has spun down ──
+        const serverReady = await wakeUpServer((statusText) => {
+            setStatus(statusText);
+            addLog(statusText);
+        });
 
+        if (!serverReady) {
+            throw new Error(
+                'Server did not respond after 90 seconds. ' +
+                'It may be experiencing issues. Please try again in a moment.'
+            );
+        }
+
+        // ── Fresh token now that server is warm ──
+        const token = await freshToken();
+        if (!token) {
+            throw new Error('Your session has expired. Please sign in again.');
+        }
+
+        // ── Create thread with retry ──
+        setStatus('Creating research thread...');
+        const threadId = await withRetry(() => createThread());
+        addLog('Thread created: ' + threadId.slice(0, 8) + '...');
+
+        // ── Stream research with retry ──
+        setStatus('Running research pipeline...');
+        const fullContent = await withRetry(
+            () => streamResearch(threadId, topic, maxAnalysts, {
+                onProgress: updateProgress,
+                onAbort: abortProgress,
+                onLog: addLog,
+                onStatus: setStatus,
+                onLayersBriefing: populateLayers,
+                onContent: () => {}
+            }),
+            { maxRetries: 1, retryDelay: 5000 }
+        );
     } catch (err) {
         console.error(err);
         setStatus("Error occurred");
+        addLog('Error: ' + err.message);
         $("spinner").style.display = "none";
 
         if (err.message.includes("401") || err.message.includes("session has expired")) {

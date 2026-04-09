@@ -26,6 +26,108 @@ export async function getHeaders() {
     return headers;
 }
 
+// ── Wake Up Server ──
+// Pings /ok (unauthenticated GET) to wake Render from cold start.
+// Returns true if server is reachable, false if timed out.
+export async function wakeUpServer(onStatusChange, options = {}) {
+    const {
+        maxAttempts = 30,
+        initialDelay = 2000,
+        maxDelay = 5000,
+    } = options;
+
+    // Quick check — server might already be warm
+    try {
+        const resp = await fetch(`${CONFIG.SERVER_URL}/ok`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(3000),
+        });
+        if (resp.ok) return true;
+    } catch {
+        // Server is cold — fall through to retry loop
+    }
+
+    onStatusChange?.('Waking up server (this may take up to 90 seconds)...');
+
+    let delay = initialDelay;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        await new Promise(r => setTimeout(r, delay));
+
+        try {
+            const resp = await fetch(`${CONFIG.SERVER_URL}/ok`, {
+                method: 'GET',
+                signal: AbortSignal.timeout(5000),
+            });
+            if (resp.ok) {
+                onStatusChange?.('Server is ready!');
+                return true;
+            }
+            onStatusChange?.(`Server starting up (attempt ${attempt}/${maxAttempts})...`);
+        } catch {
+            onStatusChange?.(`Waiting for server (attempt ${attempt}/${maxAttempts})...`);
+        }
+
+        delay = Math.min(delay * 1.2, maxDelay);
+    }
+
+    return false;
+}
+
+// ── Fresh Token ──
+// Force-refresh the Clerk JWT so the 60-second clock starts fresh.
+// Returns the token, or null if the Clerk session is gone.
+export async function freshToken() {
+    if (typeof clerk !== 'undefined' && clerk.session) {
+        const token = await clerk.session.getToken({ skipCache: true });
+        CONFIG.CLERK_TOKEN = token;
+        return token;
+    }
+    return null;
+}
+
+// ── Retry Wrapper ──
+// Handles 401 (token refresh + retry), 503 (LangGraph not ready), and network errors.
+export async function withRetry(fn, options = {}) {
+    const { maxRetries = 1, retryDelay = 3000 } = options;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (err) {
+            const isLastAttempt = attempt === maxRetries;
+            const msg = err.message || '';
+
+            // 401: Token expired during request — refresh and retry
+            if (msg.includes('401') && !isLastAttempt) {
+                const token = await freshToken();
+                if (!token) {
+                    throw new Error('Your session has expired. Please sign in again.');
+                }
+                continue;
+            }
+
+            // 503: Internal LangGraph server not ready — wait and retry
+            if (msg.includes('503') && !isLastAttempt) {
+                await new Promise(r => setTimeout(r, retryDelay));
+                await freshToken();
+                continue;
+            }
+
+            // Network error (fetch failed entirely)
+            if (err instanceof TypeError && msg.includes('fetch') && !isLastAttempt) {
+                await new Promise(r => setTimeout(r, retryDelay));
+                continue;
+            }
+
+            // All other errors or last attempt: propagate
+            throw err;
+        }
+    }
+}
+
+
+
+
 // ── Create Thread ──
 export async function createThread() {
     const threadId = crypto.randomUUID();
