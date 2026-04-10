@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Country Profiles — Editorial palette
+   #33392D olive   · #F0E7D0 cream   · #7A4419 sienna   · #718F94 blue-gray
+   ========================================================================== */
+
+@layer base {
+  :root {
+    --background: 42 55% 88%;
+    --foreground: 79 13% 20%;
+
+    --card: 42 45% 93%;
+    --card-foreground: 79 13% 20%;
+
+    --popover: 42 45% 93%;
+    --popover-foreground: 79 13% 20%;
+
+    --primary: 22 66% 29%;
+    --primary-foreground: 42 55% 94%;
+
+    --secondary: 188 13% 51%;
+    --secondary-foreground: 42 55% 96%;
+
+    --muted: 42 35% 82%;
+    --muted-foreground: 79 10% 32%;
+
+    --accent: 22 66% 29%;
+    --accent-foreground: 42 55% 94%;
+
+    --destructive: 0 62% 42%;
+    --destructive-foreground: 42 55% 96%;
+
+    --border: 79 10% 70%;
+    --input: 79 10% 70%;
+    --ring: 22 66% 29%;
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+/* ==========================================================================
+   Report prose (ported from styles/report.css)
+   ========================================================================== */
+@layer components {
+  .report-prose {
+    @apply font-sans leading-relaxed text-foreground text-[1.05rem];
+  }
+
+  .report-prose h1 {
+    @apply font-serif text-[2rem] font-medium text-foreground leading-tight mt-12 mb-4 tracking-tight;
+  }
+
+  .report-prose h2 {
+    @apply font-serif text-[1.5rem] font-medium text-foreground leading-tight mt-12 mb-4;
+  }
+
+  .report-prose h3 {
+    @apply text-[1.25rem] font-semibold text-foreground mt-8 mb-2;
+  }
+
+  .report-prose h4 {
+    @apply text-[1.1rem] font-semibold text-foreground mt-6 mb-2;
+  }
+
+  .report-prose h5 {
+    @apply text-[1.05rem] font-semibold text-muted-foreground mt-6 mb-2 tracking-wide;
+  }
+
+  .report-prose > h1:first-child,
+  .report-prose > h2:first-child {
+    @apply mt-0;
+  }
+
+  .report-prose p {
+    @apply mb-4 leading-relaxed;
+  }
+
+  .report-prose strong {
+    @apply text-foreground font-semibold;
+  }
+
+  .report-prose em {
+    @apply italic;
+  }
+
+  .report-prose ul,
+  .report-prose ol {
+    @apply my-2 mb-4 ml-8;
+  }
+
+  .report-prose ul {
+    @apply list-disc;
+  }
+
+  .report-prose ol {
+    @apply list-decimal;
+  }
+
+  .report-prose li {
+    @apply mb-1 leading-relaxed;
+  }
+
+  .report-prose li::marker {
+    @apply text-muted-foreground;
+  }
+
+  .report-prose .source-cite {
+    color: hsl(22 66% 39%);
+    @apply text-[0.9em];
+  }
+
+  .report-prose blockquote {
+    @apply border-l-[3px] border-secondary py-2 px-6 my-4 text-muted-foreground bg-muted/60 rounded-r-md italic;
+  }
+
+  .report-prose hr {
+    @apply border-0 h-px bg-border my-12;
+  }
+
+  .report-prose code {
+    @apply font-mono text-[0.9em] bg-muted px-[0.4em] py-[0.15em] rounded-sm;
+  }
+
+  /* Layer shimmer (loading state) */
+  .layer-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted) / 0.4) 40%,
+      hsl(var(--muted)) 80%
+    );
+    background-size: 800px 100%;
+    @apply animate-shimmer rounded-md h-4 w-full;
+  }
+}
