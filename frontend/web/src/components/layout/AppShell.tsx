@@ -29,7 +29,7 @@ export function AppShell() {
         onToggleActivity={() => setActivityOpen(true)}
       />
 
-      <div className="grid min-h-0 grid-cols-1 md:grid-cols-[1fr_360px] lg:grid-cols-[260px_1fr_380px]">
+      <div className="grid min-h-0 grid-cols-1 md:grid-cols-[1fr_320px] lg:grid-cols-[1fr_1.4fr_1fr]">
         <SourcesSidebar checked={sources.checked} onToggle={sources.toggle} />
 
         <main className="flex min-h-0 flex-col">
