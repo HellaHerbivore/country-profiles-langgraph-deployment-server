@@ -21,11 +21,39 @@ class LangGraphServerManager:
     """
     Manages the lifecycle of the internal LangGraph server process.
     """
-    
+
     def __init__(self, config: ServerConfig):
         self.config = config
         self.process: Optional[asyncio.subprocess.Process] = None
         self.grpc_process: Optional[asyncio.subprocess.Process] = None
+        self._log_tasks: list[asyncio.Task] = []
+
+    async def _pipe_to_logger(self, stream: asyncio.StreamReader, prefix: str) -> None:
+        """
+        Forward every line emitted by a child process stream to this module's
+        logger. Keeping the child's output in the parent log stream is the only
+        way Render (and `docker logs`) will show us why LangGraph crashed.
+        """
+        while True:
+            try:
+                line = await stream.readline()
+            except Exception as e:
+                logger.warning(f"{prefix} log reader error: {e}")
+                return
+            if not line:
+                return
+            logger.info(f"{prefix} {line.decode(errors='replace').rstrip()}")
+
+    async def _monitor_process(self, process: asyncio.subprocess.Process, name: str) -> None:
+        """
+        Watch a child process and log when it exits. Without this, a mid-serve
+        LangGraph crash is silent: the proxy just starts returning 503s.
+        """
+        return_code = await process.wait()
+        if return_code == 0:
+            logger.warning(f"{name} exited cleanly (return code 0)")
+        else:
+            logger.error(f"{name} exited with return code {return_code}")
 
     async def start_server(self) -> bool:
         """
@@ -51,10 +79,19 @@ class LangGraphServerManager:
             self.grpc_process = await asyncio.create_subprocess_exec(
                 "core-api-grpc", "-service", "core-api",
                 env=env,
-                stdout=None,
-                stderr=None
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
             )
             logger.info(f"core-api-grpc started with PID {self.grpc_process.pid}")
+            if self.grpc_process.stdout is not None:
+                self._log_tasks.append(
+                    asyncio.create_task(
+                        self._pipe_to_logger(self.grpc_process.stdout, "[core-api-grpc]")
+                    )
+                )
+            self._log_tasks.append(
+                asyncio.create_task(self._monitor_process(self.grpc_process, "core-api-grpc"))
+            )
             # Give gRPC server a moment to initialize
             await asyncio.sleep(2)
         except FileNotFoundError:
@@ -75,8 +112,17 @@ class LangGraphServerManager:
             self.process = await asyncio.create_subprocess_exec(
                 *cmd,
                 env=env,
-                stdout=None,
-                stderr=None
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            if self.process.stdout is not None:
+                self._log_tasks.append(
+                    asyncio.create_task(
+                        self._pipe_to_logger(self.process.stdout, "[langgraph]")
+                    )
+                )
+            self._log_tasks.append(
+                asyncio.create_task(self._monitor_process(self.process, "langgraph server"))
             )
 
             # Give it a moment to start
@@ -169,6 +215,17 @@ class LangGraphServerManager:
                 logger.warning(f"Error shutting down core-api-grpc: {e}")
             finally:
                 self.grpc_process = None
+
+        # Cancel any log readers / exit monitors still running.
+        for task in self._log_tasks:
+            if not task.done():
+                task.cancel()
+        for task in self._log_tasks:
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._log_tasks.clear()
     
     def get_status(self) -> dict:
         """
