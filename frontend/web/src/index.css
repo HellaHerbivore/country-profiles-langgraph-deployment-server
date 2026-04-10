@@ -149,4 +149,48 @@
     background-size: 800px 100%;
     @apply animate-shimmer rounded-md h-4 w-full;
   }
+
+  /* ==========================================================================
+     Side panels — burgundy tones.
+     These classes re-scope the Shadcn CSS variables so every descendant class
+     (text-foreground, bg-card, border-border, text-primary, ...) resolves to
+     a cream-on-burgundy palette without touching child markup.
+     ========================================================================== */
+  .panel-sources {
+    background-color: #693F3A;
+    --foreground: 42 55% 92%;
+    --muted-foreground: 42 35% 80%;
+    --card: 6 22% 40%;
+    --card-foreground: 42 55% 92%;
+    --border: 42 35% 82%;
+    --input: 42 35% 82%;
+    --primary: 42 55% 92%;
+    --primary-foreground: 6 30% 22%;
+    --secondary: 42 55% 88%;
+    --secondary-foreground: 6 30% 22%;
+    --accent: 42 55% 92%;
+    --accent-foreground: 6 30% 22%;
+    --muted: 6 22% 44%;
+    --ring: 42 55% 92%;
+  }
+
+  .panel-activity {
+    background-color: #9E5E57;
+    --foreground: 42 55% 96%;
+    --muted-foreground: 42 45% 88%;
+    --card: 6 28% 44%;
+    --card-foreground: 42 55% 96%;
+    --border: 42 40% 86%;
+    --input: 42 40% 86%;
+    --primary: 42 55% 96%;
+    --primary-foreground: 6 29% 38%;
+    --secondary: 42 55% 92%;
+    --secondary-foreground: 6 29% 38%;
+    --accent: 42 55% 96%;
+    --accent-foreground: 6 29% 38%;
+    --muted: 6 24% 52%;
+    --destructive: 8 80% 85%;
+    --destructive-foreground: 6 29% 38%;
+    --ring: 42 55% 96%;
+  }
 }

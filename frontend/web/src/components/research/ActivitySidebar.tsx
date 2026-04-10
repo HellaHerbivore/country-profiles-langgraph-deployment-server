@@ -85,7 +85,7 @@ export function ActivitySidebarContent() {
 
 export function ActivitySidebar() {
   return (
-    <aside className="hidden min-h-0 border-l border-border bg-card/40 lg:flex lg:flex-col">
+    <aside className="panel-activity hidden min-h-0 border-l border-border lg:flex lg:flex-col">
       <ActivitySidebarContent />
     </aside>
   );

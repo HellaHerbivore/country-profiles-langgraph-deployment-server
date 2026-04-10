@@ -14,7 +14,7 @@ type MobileActivitySheetProps = {
 export function MobileActivitySheet({ open, onOpenChange }: MobileActivitySheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-4/5 max-w-sm flex-col p-0 pt-10">
+      <SheetContent side="right" className="panel-activity flex w-4/5 max-w-sm flex-col p-0 pt-10">
         <SheetHeader className="sr-only">
           <SheetTitle>Research activity</SheetTitle>
         </SheetHeader>

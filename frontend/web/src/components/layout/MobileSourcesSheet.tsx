@@ -22,7 +22,7 @@ export function MobileSourcesSheet({
 }: MobileSourcesSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="flex w-4/5 max-w-sm flex-col p-4 pt-10">
+      <SheetContent side="left" className="panel-sources flex w-4/5 max-w-sm flex-col p-4 pt-10">
         <SheetHeader className="sr-only">
           <SheetTitle>Sources</SheetTitle>
         </SheetHeader>
