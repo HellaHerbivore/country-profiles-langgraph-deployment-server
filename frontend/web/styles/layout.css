@@ -132,25 +132,44 @@ body {
   margin: 0 auto;
 }
 
-/* ── Sign-in Overlay ── */
+/* ── Sign-in Overlay (full-viewport auth gate) ── */
 .sign-in-overlay {
-  display: flex;
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
   justify-content: center;
   align-items: center;
-  min-height: 300px;
-  flex: 1;
+  background: linear-gradient(135deg, var(--primary), var(--primary-container));
 }
 
-/* When signed out, remove bottom-bar space from layout calculations */
-body.signed-out .content-shell {
-  margin-bottom: 0;
-  min-height: calc(100vh - var(--nav-height));
-}
-
-body.signed-out .main-area {
+.auth-loading {
   display: flex;
-  flex-direction: column;
-  max-height: calc(100vh - var(--nav-height));
+  align-items: center;
+  justify-content: center;
+}
+
+/* Show overlay while auth is pending or user is signed out */
+body.auth-pending .sign-in-overlay,
+body.signed-out .sign-in-overlay {
+  display: flex;
+}
+
+/* Hide the loading spinner once Clerk has finished loading */
+body:not(.auth-pending) #auth-loading {
+  display: none;
+}
+
+/* Hide the app shell while gated (pending or signed out) */
+body.auth-pending .nav-bar,
+body.auth-pending .content-shell,
+body.auth-pending .bottom-bar,
+body.auth-pending .side-panel-toggle,
+body.signed-out .nav-bar,
+body.signed-out .content-shell,
+body.signed-out .bottom-bar,
+body.signed-out .side-panel-toggle {
+  display: none !important;
 }
 
 /* ── Side Panel Close Button (mobile only) ── */
