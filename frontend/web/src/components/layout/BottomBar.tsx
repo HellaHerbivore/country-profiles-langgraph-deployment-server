@@ -31,18 +31,17 @@ export function BottomBar() {
   return (
     <div className="px-4 pb-4 pt-2 sm:px-8 md:px-12 lg:px-16">
       <div className="mx-auto w-full max-w-4xl">
-        <div className="flex items-center gap-2 rounded-full border border-border bg-card px-2 py-2 shadow-sm">
+        <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-3 shadow-sm">
           <Button
             type="button"
             variant="ghost"
-            size="icon"
             onClick={randomize}
             disabled={disabled}
             title="Try a sample question"
             aria-label="Randomize topic"
-            className="h-9 w-9 shrink-0 rounded-full"
+            className="h-14 w-14 shrink-0 rounded-full [&_svg]:size-6"
           >
-            <Dice5 className="h-4 w-4" />
+            <Dice5 />
           </Button>
           <Input
             ref={inputRef}
@@ -51,7 +50,7 @@ export function BottomBar() {
             onChange={(e) => setTopic(e.target.value)}
             placeholder="Start typing..."
             disabled={disabled}
-            className="h-9 min-w-0 flex-1 border-0 bg-transparent px-2 text-[0.95rem] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="h-14 min-w-0 flex-1 border-0 bg-transparent px-3 text-lg shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -59,10 +58,10 @@ export function BottomBar() {
               }
             }}
           />
-          <div className="flex shrink-0 items-center gap-1.5 pl-1">
+          <div className="flex shrink-0 items-center gap-2 pl-1">
             <label
               htmlFor="max-analysts"
-              className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
               Analysts
             </label>
@@ -74,18 +73,17 @@ export function BottomBar() {
               value={analysts}
               onChange={(e) => setAnalysts(parseInt(e.target.value, 10) || 1)}
               disabled={disabled}
-              className="h-8 w-14 text-center"
+              className="h-11 w-16 text-center text-base"
             />
           </div>
           <Button
             type="button"
-            size="icon"
             onClick={onGenerate}
             disabled={!canSubmit}
             aria-label="Generate"
-            className="h-9 w-9 shrink-0 rounded-full"
+            className="h-14 w-14 shrink-0 rounded-full [&_svg]:size-6"
           >
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight />
           </Button>
         </div>
       </div>
