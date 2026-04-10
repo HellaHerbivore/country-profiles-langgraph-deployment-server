@@ -299,7 +299,7 @@ window.startResearch = async function () {
 
         if (err.message.includes("401") || err.message.includes("session has expired")) {
             showError("Your session has expired. Please sign in again.");
-            $("sign-in").style.display = "flex";
+            document.body.classList.add("signed-out");
             if (typeof clerk !== "undefined") {
                 clerk.mountSignIn($("sign-in"));
             }

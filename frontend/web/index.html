@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="/styles/report.css">
     <link rel="stylesheet" href="/styles/feedback.css">
 </head>
-<body>
+<body class="auth-pending signed-out">
 
     <!-- ── Navigation Bar ── -->
     <nav class="nav-bar">
@@ -31,8 +31,6 @@
 
         <!-- ── Main Area ── -->
         <main class="main-area">
-            <div id="sign-in" class="sign-in-overlay" style="display: none;"></div>
-
             <div id="error-banner" class="error-banner"></div>
 
             <!-- Layers Panel (always visible) -->
@@ -173,6 +171,13 @@
             ></textarea>
             <button class="feedback-submit" id="feedback-submit" onclick="submitFeedback()">Send Feedback</button>
             <div class="feedback-success" id="feedback-success">Thank you for your feedback!</div>
+        </div>
+    </div>
+
+    <!-- ── Auth Overlay (full-viewport gate) ── -->
+    <div id="sign-in" class="sign-in-overlay">
+        <div id="auth-loading" class="auth-loading">
+            <span class="spinner"></span>
         </div>
     </div>
 

@@ -212,9 +212,14 @@
     }
 }
 
-/* When signed out, bottom bar is hidden */
-body.signed-out .feedback-fab {
-    bottom: 16px;
+/* Hide feedback widget while auth is pending or user is signed out */
+body.auth-pending .feedback-fab,
+body.auth-pending .feedback-panel,
+body.auth-pending .feedback-backdrop,
+body.signed-out .feedback-fab,
+body.signed-out .feedback-panel,
+body.signed-out .feedback-backdrop {
+    display: none !important;
 }
 
 /* Extra-small: bottom bar wraps to two rows */
