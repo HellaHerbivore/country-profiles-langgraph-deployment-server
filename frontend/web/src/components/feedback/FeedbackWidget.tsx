@@ -45,11 +45,13 @@ export function FeedbackWidget() {
     <>
       <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 right-4 z-40 shadow-lg sm:bottom-28 sm:right-6"
+        aria-label="Share feedback"
       >
         <MessageSquare className="h-4 w-4" />
-        Feedback
+        <span className="hidden sm:inline">Feedback</span>
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-4 sm:max-w-md">

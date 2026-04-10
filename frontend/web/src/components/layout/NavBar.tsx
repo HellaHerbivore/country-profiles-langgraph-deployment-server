@@ -2,6 +2,7 @@ import { UserButton } from "@clerk/clerk-react";
 import { Menu, PanelRightOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 
 type NavBarProps = {
   onToggleSources: () => void;
@@ -37,6 +38,7 @@ export function NavBar({ onToggleSources, onToggleActivity }: NavBarProps) {
       </div>
 
       <div className="flex items-center gap-2">
+        <FeedbackWidget />
         <Button
           variant="ghost"
           size="icon"

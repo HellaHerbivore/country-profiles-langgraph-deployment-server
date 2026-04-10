@@ -10,7 +10,6 @@ import { LoadingState } from "@/components/research/LoadingState";
 import { ReportSurface } from "@/components/research/ReportSurface";
 import { ErrorBanner } from "@/components/research/ErrorBanner";
 import { ActivitySidebar } from "@/components/research/ActivitySidebar";
-import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { useResearchContext } from "@/hooks/ResearchContext";
 import { useSources } from "@/hooks/useSources";
 
@@ -24,7 +23,7 @@ export function AppShell() {
   const showReport = state.phase === "done" && state.reportHtml;
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_1fr_auto] bg-background">
+    <div className="grid h-full min-h-0 grid-rows-[auto_1fr] bg-background">
       <NavBar
         onToggleSources={() => setSourcesOpen(true)}
         onToggleActivity={() => setActivityOpen(true)}
@@ -33,19 +32,20 @@ export function AppShell() {
       <div className="grid min-h-0 grid-cols-1 md:grid-cols-[1fr_360px] lg:grid-cols-[260px_1fr_380px]">
         <SourcesSidebar checked={sources.checked} onToggle={sources.toggle} />
 
-        <main className="min-h-0 overflow-y-auto px-4 py-8 sm:px-8 md:px-12 lg:px-16">
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
-            <ErrorBanner message={state.error} />
-            <LayersPanel />
-            {showLoading && <LoadingState />}
-            {showReport && <ReportSurface />}
+        <main className="flex min-h-0 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-8 md:px-12 lg:px-16">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
+              <ErrorBanner message={state.error} />
+              <LayersPanel />
+              {showLoading && <LoadingState />}
+              {showReport && <ReportSurface />}
+            </div>
           </div>
+          <BottomBar />
         </main>
 
         <ActivitySidebar />
       </div>
-
-      <BottomBar />
 
       <MobileSourcesSheet
         open={sourcesOpen}
@@ -54,7 +54,6 @@ export function AppShell() {
         onToggle={sources.toggle}
       />
       <MobileActivitySheet open={activityOpen} onOpenChange={setActivityOpen} />
-      <FeedbackWidget />
     </div>
   );
 }
