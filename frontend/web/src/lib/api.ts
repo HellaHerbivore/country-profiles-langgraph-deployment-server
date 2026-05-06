@@ -241,13 +241,7 @@ export async function streamResearch(
         } else {
           fullContent += event.text;
 
-          if (event.text.includes("Report Finalized")) {
-            callbacks.onStatus?.("Report finalized, restructuring...");
-            callbacks.onLog?.("Report finalized");
-          } else if (event.text.includes("Structured Profile Complete")) {
-            callbacks.onStatus?.("Structured profile complete!");
-            callbacks.onLog?.("Structured profile generated");
-          } else if (event.text.includes("ABORTED")) {
+          if (event.text.includes("ABORTED")) {
             callbacks.onStatus?.("Research aborted - not enough data");
             callbacks.onLog?.("Aborted: not enough internal knowledge");
           }
@@ -281,19 +275,13 @@ export async function streamResearch(
 
 // ── Extract Report ──
 export function extractReport(fullContent: string): string {
-  const structuredMarker = "### 📊 Structured Profile Complete";
-  const finalizedMarker = "### ✅ Report Finalized";
+  const briefingMarker = "# Strategic Briefing:";
 
   let report = "";
 
-  const structuredIdx = fullContent.lastIndexOf(structuredMarker);
-  if (structuredIdx !== -1) {
-    report = fullContent.slice(structuredIdx + structuredMarker.length).trim();
-  } else {
-    const finalizedIdx = fullContent.lastIndexOf(finalizedMarker);
-    if (finalizedIdx !== -1) {
-      report = fullContent.slice(finalizedIdx + finalizedMarker.length).trim();
-    }
+  const briefingIdx = fullContent.lastIndexOf(briefingMarker);
+  if (briefingIdx !== -1) {
+    report = fullContent.slice(briefingIdx).trim();
   }
 
   if (!report && fullContent.length > 100) {

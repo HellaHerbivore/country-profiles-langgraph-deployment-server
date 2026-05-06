@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type Tier = "MACRO" | "MESO" | "MICRO";
+type Tier = "MESO" | "MICRO" | "HIDDEN";
 
 type LayerCardProps = {
   tier: Tier;
@@ -8,15 +8,14 @@ type LayerCardProps = {
   isLoading: boolean;
 };
 
-// Replace **x** with <strong>x</strong>, like the original boldify()
 function boldify(text: string): string {
   return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
 const tierStyles: Record<Tier, string> = {
-  MACRO: "bg-primary/15 text-primary",
   MESO: "bg-secondary/25 text-secondary-foreground",
   MICRO: "bg-accent/15 text-accent",
+  HIDDEN: "bg-primary/15 text-primary",
 };
 
 export function LayerCard({ tier, body, isLoading }: LayerCardProps) {

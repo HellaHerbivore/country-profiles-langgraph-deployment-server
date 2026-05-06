@@ -7,10 +7,11 @@ export type ResearchPhase =
   | "aborted";
 
 export type LayersBriefing = {
-  synthesis?: string;
-  macro?: string;
+  macro_statement?: string;
+  data_points?: string[];
   meso?: string;
   micro?: string;
+  hidden?: string;
 };
 
 export type ResearchState = {
