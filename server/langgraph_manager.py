@@ -6,6 +6,7 @@ LangGraph server process.
 """
 
 import os
+import json
 import logging
 import asyncio
 from typing import Optional
@@ -15,6 +16,8 @@ import httpx
 from server.config import ServerConfig
 
 logger = logging.getLogger(__name__)
+
+GRPC_CONFIG_PATH = "/tmp/core-api-grpc-config.yaml"
 
 
 class LangGraphServerManager:
@@ -48,8 +51,9 @@ class LangGraphServerManager:
         # Start the gRPC sidecar first (required by LangGraph API server)
         try:
             logger.info("Starting core-api-grpc sidecar...")
+            self._generate_grpc_config(env)
             self.grpc_process = await asyncio.create_subprocess_exec(
-                "core-api-grpc", "-service", "core-api",
+                "core-api-grpc", "-configPath", GRPC_CONFIG_PATH,
                 env=env,
                 stdout=None,
                 stderr=None
@@ -98,6 +102,39 @@ class LangGraphServerManager:
             logger.error(f"Failed to start LangGraph server: {e}")
             return False
     
+    def _generate_grpc_config(self, env: dict) -> None:
+        """Generate a YAML config file for core-api-grpc from environment variables."""
+        config = {
+            "CoreApi": {
+                "GrpcServer": {
+                    "Address": "127.0.0.1:50051",
+                    "MaxRecvMsgSizeInBytes": 314572800,
+                    "MaxSendMsgSizeInBytes": 314572800,
+                },
+                "EnableAdminAPIs": True,
+                "LangserveGraphsJSON": env.get("LANGSERVE_GRAPHS", "{}"),
+            },
+            "Persistence": {
+                "Database": {
+                    "DatabaseType": "postgres",
+                    "URI": env.get("DATABASE_URI", ""),
+                },
+                "Redis": {
+                    "URI": env.get("REDIS_URI", ""),
+                },
+            },
+            "License": {
+                "LangSmithAPIKey": env.get("LANGSMITH_API_KEY", ""),
+            },
+            "Logger": {
+                "Level": env.get("LOG_LEVEL", "INFO"),
+            },
+            "MonitoringEndpointPort": int(env.get("LANGGRAPH_INTERNAL_PORT", "8123")),
+        }
+        with open(GRPC_CONFIG_PATH, "w") as f:
+            json.dump(config, f, indent=2)
+        logger.info(f"Generated gRPC config at {GRPC_CONFIG_PATH}")
+
     async def wait_for_ready(self, max_wait: int = 180) -> bool:
         """
         Wait for the LangGraph server to be ready to accept requests.
