@@ -44,6 +44,16 @@ INDIA_MACRO_STATEMENT = """India's regulatory framework is anchored in the landm
 
 INDIA_DATA_POINTS = ["1.4B population", "~4.5B Land Animals/Year", "62 FAOI", "32 WAPI"]
 
+# ---------------------------------------------------------------------------
+# 1c. Global Rules
+# ---------------------------------------------------------------------------
+GLOBAL_CITATION_RULES = """CITATION RULES:
+1. DO NOT use file names (like .pdf or .md) in your final citations.
+2. Any specific detail, claim, statistic, or pivotal finding MUST be cited in this exact format: <span style="color: #888888;">[Date, Author, Exact Title]</span>
+3. If citing multiple sources, separate them with a semicolon: <span style="color: #888888;">[Date, Author, Title; Date, Author, Title]</span>
+4. FOR GOVERNMENT PRESS RELEASES (PIB files): You must format these citations exactly as: <span style="color: #888888;">[Date of release, Ministry of Fisheries, Animal Husbandry & Dairying, Exact Title of Press Release]</span>
+5. When in doubt, cite the source."""
+
 
 # ---------------------------------------------------------------------------
 # 2. Shapes of our Data (Schemas)
@@ -210,8 +220,11 @@ def generate_answer(state: InterviewState):
     1. You have NO knowledge outside of the files in your internal vaults.
     2. If the answer is not in the files, say EXACTLY: "The internal vaults do not contain this information."
     3. Do not use your own training data to fill in gaps.
-    4. CORROBORATION PROTOCOL: Actively cross-reference findings. If you find a claim in an academic or advocate file, you MUST search the government press releases (PIB) to see if the government corroborates, contradicts, or ignores the issue. Highlight these intersections clearly.
-    5. Use specific filenames for citations [filename.pdf or filename.md] at the end of the sentence.
+    4. CORROBORATION PROTOCOL: You MUST actively cross-reference findings. The official Indian government press releases are stored in the files named `fisheries_releases_20XX.md` (Note: These files contain ALL data for the Ministry of Fisheries, Animal Husbandry & Dairying). 
+    5. For every major claim found in an academic/advocacy file, you MUST explicitly search the `fisheries_releases` files and state whether the government corroborates, contradicts, or ignores the issue.
+    6. METADATA REQUIREMENT: To properly cite sources, you MUST extract the Date, Author, and Title from the documents you are reading. 
+    
+    {GLOBAL_CITATION_RULES}
     """
 
     model_config = types.GenerateContentConfig(
@@ -426,12 +439,8 @@ CRITICAL RULES:
 1. Present this as a unified, objective briefing. DO NOT mention any AI analyst names, interviewers, or experts.
 2. NEVER summarise away numeric or statistical data. Every figure, percentage, currency value, multiplier, or statistic from the memos MUST appear in your output exactly as stated.
 3. Preserve highly insightful information verbatim — do not water down sharp observations.
-4. CITATION RULES:
-   - General, well-established statements do NOT need inline citations.
-   - Any specific detail, claim, statistic, or pivotal finding MUST be cited with the exact filename: [filename.pdf].
-   - When in doubt, cite the source.
-   - DO NOT change, rename, or translate file names.
-5. List all cited source filenames at the bottom under ## Sources.
+
+{citation_rules}
 
 Research memos:
 {context}"""
@@ -441,7 +450,11 @@ def write_evidence(state: ResearchGraphState):
     content = state.get("content", "")
     topic = state["topic"]
 
-    system_message = evidence_instructions.format(topic=topic, context=content)
+    system_message = evidence_instructions.format(
+        topic=topic, 
+        context=content, 
+        citation_rules=GLOBAL_CITATION_RULES
+    )
     result = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'What the Evidence Says' section based on these research memos.")])
 
     text = result.content
@@ -465,9 +478,10 @@ INSTRUCTIONS:
 2. Reference what evidence DOES exist to frame the boundaries of knowledge — this shows where the gaps begin.
 3. Consider: What questions does the available evidence raise but not answer? What assumptions does it make without supporting data?
 4. Think about: Are there stakeholder perspectives missing? Geographic blind spots? Temporal gaps (outdated data)? Methodological limitations?
-5. CITATION RULES: When referencing existing evidence to frame a gap, cite the source [filename.pdf]. This shows you're grounding the gap identification in real material.
-6. DO NOT mention any AI analyst names, interviewers, or experts.
-7. Preserve any numeric data that contextualizes a gap.
+5. DO NOT mention any AI analyst names, interviewers, or experts.
+6. Preserve any numeric data that contextualizes a gap.
+
+{citation_rules}
 
 Research memos:
 {context}"""
@@ -477,7 +491,11 @@ def write_gaps(state: ResearchGraphState):
     content = state.get("content", "")
     topic = state["topic"]
 
-    system_message = gaps_instructions.format(topic=topic, context=content)
+    system_message = gaps_instructions.format(
+        topic=topic, 
+        context=content,
+        citation_rules=GLOBAL_CITATION_RULES
+    )
     result = llm_creative.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'Gaps in the Evidence' section. Identify what we don't know based on the available evidence.")])
 
     text = result.content
@@ -501,12 +519,10 @@ INSTRUCTIONS:
 2. Ground every opportunity in specific evidence from the memos. Do not speculate beyond what the data supports.
 3. Be concrete about WHY the window is time-sensitive — what makes it urgent?
 4. NEVER summarise away numeric or statistical data. Preserve all figures exactly.
-5. CITATION RULES:
-   - Specific claims or evidence supporting an opportunity MUST be cited [filename.pdf].
-   - When in doubt, cite the source.
-   - DO NOT change, rename, or translate file names.
-6. DO NOT mention any AI analyst names, interviewers, or experts.
-7. If the evidence does not clearly indicate time-sensitive opportunities, say so transparently rather than fabricating urgency.
+5. DO NOT mention any AI analyst names, interviewers, or experts.
+6. If the evidence does not clearly indicate time-sensitive opportunities, say so transparently rather than fabricating urgency.
+
+{citation_rules}
 
 Research memos:
 {context}"""
@@ -516,7 +532,11 @@ def write_opportunities(state: ResearchGraphState):
     content = state.get("content", "")
     topic = state["topic"]
 
-    system_message = opportunities_instructions.format(topic=topic, context=content)
+    system_message = opportunities_instructions.format(
+        topic=topic, 
+        context=content,
+        citation_rules=GLOBAL_CITATION_RULES
+    )
     result = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'Windows of Opportunity' section. Identify time-sensitive opportunities or crises for animal advocacy.")])
 
     text = result.content
@@ -539,13 +559,11 @@ INSTRUCTIONS:
 1. List organisations, coalitions, government bodies, or key individuals mentioned in the evidence that are active on this topic.
 2. For each player, note what the evidence says about their current activities, positions, or campaigns.
 3. BE TRANSPARENT ABOUT LIMITATIONS: The internal document vaults may have limited information about who the current players are and what they're doing right now. If the evidence doesn't clearly identify active players, say so explicitly. Do NOT invent or assume what organisations are doing.
-4. CITATION RULES:
-   - Any mention of a specific organisation's activities MUST be cited [filename.pdf].
-   - When in doubt, cite the source.
-   - DO NOT change, rename, or translate file names.
-5. DO NOT mention any AI analyst names, interviewers, or experts.
-6. Preserve any numeric data (e.g., membership numbers, funding figures) exactly as stated.
-7. If very little information about players exists in the vaults, a short honest section is better than a padded speculative one.
+4. DO NOT mention any AI analyst names, interviewers, or experts.
+5. Preserve any numeric data (e.g., membership numbers, funding figures) exactly as stated.
+6. If very little information about players exists in the vaults, a short honest section is better than a padded speculative one.
+
+{citation_rules}
 
 Research memos:
 {context}"""
@@ -555,7 +573,11 @@ def write_players(state: ResearchGraphState):
     content = state.get("content", "")
     topic = state["topic"]
 
-    system_message = players_instructions.format(topic=topic, context=content)
+    system_message = players_instructions.format(
+        topic=topic, 
+        context=content,
+        citation_rules=GLOBAL_CITATION_RULES
+    )
     result = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'Current Players' section. Identify active players in the animal advocacy ecosystem relevant to this topic.")])
 
     text = result.content
@@ -581,10 +603,11 @@ def finalize_report(state: ResearchGraphState):
     players = state.get("players_section", "")
     topic = state["topic"]
 
-    # Extract sources from all sections
+    # Extract sources from all sections using the new HTML span regex
     all_sources = set()
     for section_text in [evidence, gaps, opportunities, players]:
-        found = re.findall(r'\[([^\]]+\.pdf)\]', section_text)
+        # This catches anything inside our colored brackets
+        found = re.findall(r'<span style="color: #[0-9a-fA-F]+;">\[(.*?)\]</span>', section_text)
         all_sources.update(found)
 
     sources_list = "\n".join(f"- {s}" for s in sorted(all_sources)) if all_sources else "- No sources cited"
