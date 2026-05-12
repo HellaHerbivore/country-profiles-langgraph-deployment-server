@@ -55,9 +55,9 @@ GLOBAL_CITATION_RULES = """CITATION RULES:
 5. When in doubt, cite the source."""
 
 
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # 2. Shapes of our Data (Schemas)
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 class Analyst(BaseModel):
     affiliation: str = Field(description="Primary affiliation of the analyst.")
     name: str = Field(description="Name of the analyst.")
