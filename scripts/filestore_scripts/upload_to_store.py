@@ -4,13 +4,14 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 from colorama import Fore, Style
-from config import get_client, FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE
+from config import get_client, FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE, GOI_PIB_STORE
 
 # Store aliases for convenience
 STORE_ALIASES = {
     "foreign-academic": FOREIGN_ACADEMIC_STORE,
     "on-ground": ON_GROUND_ADVOCATE_STORE,
     "local-academic": LOCAL_ACADEMIC_STORE,
+    "goi-pib": GOI_PIB_STORE,
 }
 
 client = get_client()

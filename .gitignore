@@ -52,6 +52,9 @@ desktop.ini
 # Data and output files
 data/
 reports/
+data_temp/
+data_markdown/
+data_full_text/
 
 # Open Paws Tools
 .desloppify/

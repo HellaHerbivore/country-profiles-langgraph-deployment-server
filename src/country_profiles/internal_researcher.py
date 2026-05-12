@@ -35,6 +35,7 @@ gemini_client = genai.Client(api_key=google_api_key)
 FOREIGN_ACADEMIC_STORE = "fileSearchStores/foreign-academic-sources-bqaqi98at2b3"
 ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy92h3"
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
+GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
 
 # ---------------------------------------------------------------------------
 # 1b. Static Country Context
@@ -209,12 +210,13 @@ def generate_answer(state: InterviewState):
     1. You have NO knowledge outside of the files in your internal vaults.
     2. If the answer is not in the files, say EXACTLY: "The internal vaults do not contain this information."
     3. Do not use your own training data to fill in gaps.
-    4. Use specific filenames for citations [filename.pdf] at the end of the sentence.
+    4. CORROBORATION PROTOCOL: Actively cross-reference findings. If you find a claim in an academic or advocate file, you MUST search the government press releases (PIB) to see if the government corroborates, contradicts, or ignores the issue. Highlight these intersections clearly.
+    5. Use specific filenames for citations [filename.pdf or filename.md] at the end of the sentence.
     """
 
     model_config = types.GenerateContentConfig(
         system_instruction=expert_instructions,
-        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE]))],
+        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE, GOI_PIB_STORE]))],
         temperature=0.0,
     )
 
