@@ -37,6 +37,17 @@ ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy9
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
 
+# Maps a human-readable store key -> (file_search_store_id, description for the planner)
+STORE_REGISTRY = {
+    "foreign_academic": (FOREIGN_ACADEMIC_STORE, "Foreign / international academic research sources."),
+    "onground_advocate": (ON_GROUND_ADVOCATE_STORE, "On-the-ground advocate and field organisation sources."),
+    "local_academic": (LOCAL_ACADEMIC_STORE, "India-based academic research sources."),
+    "goi_pib": (GOI_PIB_STORE, "Government of India PIB press releases (Ministry of Fisheries, Animal Husbandry & Dairying)."),
+}
+
+# Default selection until user-driven selection is wired in.
+DEFAULT_SELECTED_STORES = list(STORE_REGISTRY.keys())
+
 # ---------------------------------------------------------------------------
 # 1b. Static Country Context
 # ---------------------------------------------------------------------------
@@ -50,8 +61,8 @@ INDIA_DATA_POINTS = ["1.4B population", "~4.5B Land Animals/Year", "62 FAOI", "3
 GLOBAL_CITATION_RULES = """CITATION RULES:
 1. Cite using the EXACT source name as it appears in the filestore, with any file extension removed (drop .md, .pdf, etc.). Example: a file named `local_welfare_review_2021.pdf` is cited as `local_welfare_review_2021`.
 2. EXCEPTION — PIB sources: any source file named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`) is a yearly collection of press releases from the Government of India Press Information Bureau (PIB). These files must NEVER be cited by filename. Because one file holds many releases, each must instead be cited as: [Date of release, Ministry of Fisheries, Animal Husbandry & Dairying, Exact Title of Press Release, PIB] — with the date and title extracted from the specific release within the file.
-3. Every specific detail, claim, statistic, or pivotal finding MUST carry a citation, wrapped exactly like this: <span style="color: #888888;">[citation]</span>
-4. If citing multiple sources for one claim, separate them with a semicolon inside a single span: <span style="color: #888888;">[source_one; source_two]</span>
+3. Every specific detail, claim, statistic, or pivotal finding MUST carry a citation, wrapped exactly like this: <span style="color: #693f3a;">[citation]</span>
+4. If citing multiple sources for one claim, separate them with a semicolon inside a single span: <span style="color: #693f3a;">[source_one; source_two]</span>
 5. When in doubt, cite the source."""
 
 
@@ -81,6 +92,7 @@ class InterviewState(MessagesState):
     max_num_turns: int
     context: Annotated[list, operator.add]
     analyst: Analyst
+    research_plan: dict
     interview: str
     sections: list
 
@@ -88,6 +100,8 @@ class ResearchGraphState(TypedDict):
     topic: str
     max_analysts: int
     human_analyst_feedback: str
+    selected_stores: List[str]
+    research_plan: dict[str, object]
     analysts: List[Analyst]
     sections: Annotated[list, operator.add]
     content: str
@@ -97,32 +111,105 @@ class ResearchGraphState(TypedDict):
     players_section: str
     messages: Annotated[list, operator.add]
     final_report: str
-    layers_briefing: str
+    # layers_briefing: str
 
 
 # ---------------------------------------------------------------------------
 # 3. Work Nodes (The Steps)
 # ---------------------------------------------------------------------------
 
-# --- 3a. Layers Briefing (static macro + dynamic meso/micro/hidden) ---
+# # --- 3a. Layers Briefing (static macro + dynamic meso/micro/hidden) ---
 
-layers_briefing_instructions = """You are a strategic analyst for animal advocacy. Given the research topic below, provide a brief (2–4 sentences each) overview of the actors and forces of change at three levels:
+# layers_briefing_instructions = """You are a strategic analyst for animal advocacy. Given the research topic below, provide a brief (2–4 sentences each) overview of the actors and forces of change at three levels:
 
-- **Meso**: Sector and institutional forces relevant to this topic — industry associations, professional bodies, regional government, large NGOs, media networks, religious institutions operating at organisational scale.
-- **Micro**: Ground-level and individual forces — grassroots organisations, community leaders, individual consumers, local activists, household-level dynamics, frontline workers.
-- **Hidden**: Forces that are present but easily overlooked — informal economies, unregulated supply chains, cultural taboos, data gaps, silent stakeholders, unintended policy side-effects.
+# - **Meso**: Sector and institutional forces relevant to this topic — industry associations, professional bodies, regional government, large NGOs, media networks, religious institutions operating at organisational scale.
+# - **Micro**: Ground-level and individual forces — grassroots organisations, community leaders, individual consumers, local activists, household-level dynamics, frontline workers.
+# - **Hidden**: Forces that are present but easily overlooked — informal economies, unregulated supply chains, cultural taboos, data gaps, silent stakeholders, unintended policy side-effects.
 
-Bold the 1–2 most important phrases per level using markdown **bold**.
-Respond as JSON with keys: meso, micro, hidden."""
+# Bold the 1–2 most important phrases per level using markdown **bold**.
+# Respond as JSON with keys: meso, micro, hidden."""
 
-def generate_layers_briefing(state: ResearchGraphState):
+# def generate_layers_briefing(state: ResearchGraphState):
+#     topic = state.get("topic")
+#     if not topic and state.get("messages"):
+#         topic = state["messages"][-1].content
+
+#     result = llm.invoke([
+#         SystemMessage(content=layers_briefing_instructions),
+#         HumanMessage(content=f"Topic: {topic}")
+#     ])
+
+#     content = result.content
+#     if isinstance(content, list):
+#         content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
+#     else:
+#         content = str(content)
+
+#     content = content.strip()
+#     if content.startswith("```"):
+#         content = re.sub(r'^```(?:json)?\s*', '', content)
+#         content = re.sub(r'\s*```$', '', content)
+
+#     # Parse dynamic layers and combine with static macro
+#     try:
+#         dynamic_layers = json.loads(content)
+#     except json.JSONDecodeError:
+#         dynamic_layers = {"meso": content, "micro": "", "hidden": ""}
+
+#     full_briefing = json.dumps({
+#         "macro_statement": INDIA_MACRO_STATEMENT,
+#         "data_points": INDIA_DATA_POINTS,
+#         "meso": dynamic_layers.get("meso", ""),
+#         "micro": dynamic_layers.get("micro", ""),
+#         "hidden": dynamic_layers.get("hidden", ""),
+#     })
+
+#     return {
+#         "layers_briefing": full_briefing,
+#         "topic": topic,
+#         "messages": [AIMessage(
+#             content=f"[LAYERS_BRIEFING]{full_briefing}",
+#             name="System"
+#         )]
+#     }
+
+# --- 3a. Research Planning ---
+
+research_plan_instructions = """You are the lead researcher planning how to investigate a topic for an animal advocacy strategic briefing.
+
+Research topic:
+{topic}
+
+You have access to ONLY these document filestores (you must not assume any others exist):
+{store_menu}
+
+Your job:
+1. Choose ONE store as the PRIMARY anchor — the one whose evidence is most central to this specific topic.
+2. The remaining selected stores are SECONDARY — used to corroborate the primary evidence and to expose gaps.
+3. Explain your reasoning briefly and concretely: why this primary, why these stores corroborate well for THIS topic.
+
+Respond as JSON with keys:
+- "primary": the store key string of the primary store
+- "secondary": list of the remaining selected store key strings
+- "rationale": 2-4 sentences explaining the choice, written for a human reader
+- "brief": a short (3-5 sentence) plain-language note to the user describing how you'll approach the research, readable while the rest of the report generates"""
+
+
+def plan_research(state: ResearchGraphState):
     topic = state.get("topic")
     if not topic and state.get("messages"):
         topic = state["messages"][-1].content
 
+    selected = state.get("selected_stores") or DEFAULT_SELECTED_STORES
+    selected = [s for s in selected if s in STORE_REGISTRY]
+    if not selected:
+        selected = list(STORE_REGISTRY.keys())
+
+    store_menu = "\n".join(f"- {key}: {STORE_REGISTRY[key][1]}" for key in selected)
+
     result = llm.invoke([
-        SystemMessage(content=layers_briefing_instructions),
-        HumanMessage(content=f"Topic: {topic}")
+        SystemMessage(content=research_plan_instructions.format(topic=topic, store_menu=store_menu)),
+        HumanMessage(content="Produce the research plan as JSON.")
     ])
 
     content = result.content
@@ -136,25 +223,29 @@ def generate_layers_briefing(state: ResearchGraphState):
         content = re.sub(r'^```(?:json)?\s*', '', content)
         content = re.sub(r'\s*```$', '', content)
 
-    # Parse dynamic layers and combine with static macro
     try:
-        dynamic_layers = json.loads(content)
+        plan = json.loads(content)
     except json.JSONDecodeError:
-        dynamic_layers = {"meso": content, "micro": "", "hidden": ""}
+        # Fallback: first selected store is primary, rest secondary
+        plan = {
+            "primary": selected[0],
+            "secondary": selected[1:],
+            "rationale": "Defaulted to the first selected store as primary due to a planning parse error.",
+            "brief": "Proceeding with a default research plan across the selected sources.",
+        }
 
-    full_briefing = json.dumps({
-        "macro_statement": INDIA_MACRO_STATEMENT,
-        "data_points": INDIA_DATA_POINTS,
-        "meso": dynamic_layers.get("meso", ""),
-        "micro": dynamic_layers.get("micro", ""),
-        "hidden": dynamic_layers.get("hidden", ""),
-    })
+    # Sanitize: make sure primary/secondary only reference selected stores
+    if plan.get("primary") not in selected:
+        plan["primary"] = selected[0]
+    plan["secondary"] = [s for s in plan.get("secondary", []) if s in selected and s != plan["primary"]]
+    plan["selected_stores"] = selected
 
     return {
-        "layers_briefing": full_briefing,
+        "research_plan": plan,
         "topic": topic,
+        "selected_stores": selected,
         "messages": [AIMessage(
-            content=f"[LAYERS_BRIEFING]{full_briefing}",
+            content=f"[PROGRESS:10] Research plan ready\n\n**How I'll approach this:** {plan.get('brief', '')}",
             name="System"
         )]
     }
@@ -212,23 +303,49 @@ def generate_answer(state: InterviewState):
     """Answers questions strictly using internal vaults via Gemini File Search."""
     analyst = state["analyst"]
     messages = state["messages"]
+    research_plan = state.get("research_plan", {}) or {}
+
+    selected = research_plan.get("selected_stores") or DEFAULT_SELECTED_STORES
+    selected = [str(s) for s in selected if s in STORE_REGISTRY]
+    if not selected:
+        selected = list(STORE_REGISTRY.keys())
+
+    primary = research_plan.get("primary")
+    if not isinstance(primary, str) or primary not in selected:
+        primary = selected[0]
+    secondary = [s for s in selected if s != primary]
+
+    primary_id = STORE_REGISTRY[primary][0]
+    active_store_ids = [STORE_REGISTRY[k][0] for k in selected]
+
+    primary_desc = STORE_REGISTRY[primary][1]
+    secondary_desc = "\n".join(f"    - {STORE_REGISTRY[k][1]}" for k in secondary) or "    - (none — only the primary store is selected)"
+
+    pib_selected = "goi_pib" in selected
 
     expert_instructions = f"""You are a strict data-retrieval expert.
     Analyst focus: {analyst.persona}
 
+    SOURCE STRATEGY FOR THIS RESEARCH:
+    - PRIMARY anchor store: {primary_desc}
+      Treat this as your main source of evidence — lead with it.
+    - SECONDARY stores (use to corroborate the primary evidence and to expose gaps):
+{secondary_desc}
+    You may ONLY use the stores listed above. No other stores exist for this task.
+
     CRITICAL RULES:
-    1. You have NO knowledge outside of the files in your internal vaults.
+    1. You have NO knowledge outside of the files in the stores listed above.
     2. If the answer is not in the files, say EXACTLY: "The internal vaults do not contain this information."
     3. Do not use your own training data to fill in gaps.
-    4. CORROBORATION PROTOCOL: You MUST actively cross-reference findings. The official Indian government press releases are stored in the files named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`). For every major claim found in an academic/advocacy file, you MUST check those PIB files and state whether the government corroborates, contradicts, or ignores the issue.
-    5. PIB METADATA: For any claim drawn from a `fisheries_releases_<year>` file, you MUST extract the date of release and the exact title of the specific press release — these are required for its citation (see citation rules below), because the filename cannot serve as the citation. For all non-PIB sources, the citation is just the filename, so no metadata extraction is needed.
+    4. CORROBORATION PROTOCOL: For every major claim drawn from the primary store, you MUST actively cross-reference it against the secondary stores and state whether they corroborate, contradict, or are silent on the issue. Where the secondary stores are silent on something the primary store treats as important, name that explicitly as a GAP.
+    {"5. PIB SOURCES: Government of India press releases are stored in files named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`). For any claim drawn from one of these files, you MUST extract the date of release and the exact title of the specific press release — these are required for its citation, because the filename cannot serve as the citation. For all non-PIB sources, the citation is just the filename." if pib_selected else "5. (No PIB store selected for this task.)"}
 
     {GLOBAL_CITATION_RULES}
     """
 
     model_config = types.GenerateContentConfig(
         system_instruction=expert_instructions,
-        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=[FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE, GOI_PIB_STORE]))],
+        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=active_store_ids))],
         temperature=0.0,
     )
 
@@ -350,8 +467,10 @@ interview_builder.add_edge("write_section", END)
 # ---------------------------------------------------------------------------
 def initiate_all_interviews(state: ResearchGraphState):
     topic = state["topic"]
+    research_plan = state.get("research_plan", {})
     return [Send("conduct_interview", {
         "analyst": analyst,
+        "research_plan": research_plan,
         "messages": [HumanMessage(
             content=f"We are building a Strategic Country Profile for {topic}. As our {analyst.name}, identify the key advocacy bottlenecks and windows of opportunity in your specialized area."
         )]
@@ -601,6 +720,7 @@ def finalize_report(state: ResearchGraphState):
     opportunities = state.get("opportunities_section", "")
     players = state.get("players_section", "")
     topic = state["topic"]
+    research_plan = state.get("research_plan", {}) or {}
 
     # Collect every citation from all sections (matches the colored-span wrapper)
     all_sources = set()
@@ -613,7 +733,19 @@ def finalize_report(state: ResearchGraphState):
 
     sources_list = "\n".join(f"- {s}" for s in sorted(all_sources)) if all_sources else "- No sources cited"
 
+    primary_key = research_plan.get("primary", "")
+    primary_label = STORE_REGISTRY[primary_key][1] if primary_key in STORE_REGISTRY else "Not specified"
+    plan_rationale = research_plan.get("rationale", "No research plan rationale available.")
+
     final_report_str = f"""# Strategic Briefing: {topic}
+
+## How This Research Was Approached
+
+**Primary source store:** {primary_label}
+
+{plan_rationale}
+
+---
 
 ## What the Evidence Says
 
@@ -656,7 +788,8 @@ def finalize_report(state: ResearchGraphState):
 # 6. Build the Graph
 # ---------------------------------------------------------------------------
 builder = StateGraph(ResearchGraphState)
-builder.add_node("generate_layers_briefing", generate_layers_briefing)
+# builder.add_node("generate_layers_briefing", generate_layers_briefing)
+builder.add_node("plan_research", plan_research)
 builder.add_node("create_analysts", create_analysts)
 builder.add_node("conduct_interview", interview_builder.compile())
 builder.add_node("collect_sections", collect_sections)
@@ -668,8 +801,12 @@ builder.add_node("write_opportunities", write_opportunities)
 builder.add_node("write_players", write_players)
 builder.add_node("finalize_report", finalize_report)
 
-builder.add_edge(START, "generate_layers_briefing")
-builder.add_edge("generate_layers_briefing", "create_analysts")
+# builder.add_edge(START, "generate_layers_briefing")
+# builder.add_edge("generate_layers_briefing", "create_analysts")
+# builder.add_conditional_edges("create_analysts", initiate_all_interviews, ["conduct_interview"])
+
+builder.add_edge(START, "plan_research")
+builder.add_edge("plan_research", "create_analysts")
 builder.add_conditional_edges("create_analysts", initiate_all_interviews, ["conduct_interview"])
 
 builder.add_edge("conduct_interview", "collect_sections")
