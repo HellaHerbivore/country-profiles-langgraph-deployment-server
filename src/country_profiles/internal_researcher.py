@@ -92,7 +92,7 @@ class InterviewState(MessagesState):
     max_num_turns: int
     context: Annotated[list, operator.add]
     analyst: Analyst
-    research_plan: dict
+    interview_research_plan: dict
     interview: str
     sections: list
 
@@ -303,7 +303,7 @@ def generate_answer(state: InterviewState):
     """Answers questions strictly using internal vaults via Gemini File Search."""
     analyst = state["analyst"]
     messages = state["messages"]
-    research_plan = state.get("research_plan", {}) or {}
+    research_plan = state.get("interview_research_plan", {}) or {}
 
     selected = research_plan.get("selected_stores") or DEFAULT_SELECTED_STORES
     selected = [str(s) for s in selected if s in STORE_REGISTRY]
@@ -467,10 +467,10 @@ interview_builder.add_edge("write_section", END)
 # ---------------------------------------------------------------------------
 def initiate_all_interviews(state: ResearchGraphState):
     topic = state["topic"]
-    research_plan = state.get("research_plan", {})
+    interview_research_plan = state.get("research_plan", {})
     return [Send("conduct_interview", {
         "analyst": analyst,
-        "research_plan": research_plan,
+        "research_plan": interview_research_plan,
         "messages": [HumanMessage(
             content=f"We are building a Strategic Country Profile for {topic}. As our {analyst.name}, identify the key advocacy bottlenecks and windows of opportunity in your specialized area."
         )]
