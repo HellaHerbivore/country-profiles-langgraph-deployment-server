@@ -48,10 +48,10 @@ INDIA_DATA_POINTS = ["1.4B population", "~4.5B Land Animals/Year", "62 FAOI", "3
 # 1c. Global Rules
 # ---------------------------------------------------------------------------
 GLOBAL_CITATION_RULES = """CITATION RULES:
-1. DO NOT use file names (like .pdf or .md) in your final citations.
-2. Any specific detail, claim, statistic, or pivotal finding MUST be cited in this exact format: <span style="color: #888888;">[Date, Author, Exact Title]</span>
-3. If citing multiple sources, separate them with a semicolon: <span style="color: #888888;">[Date, Author, Title; Date, Author, Title]</span>
-4. FOR GOVERNMENT PRESS RELEASES (PIB files): You must format these citations exactly as: <span style="color: #888888;">[Date of release, Ministry of Fisheries, Animal Husbandry & Dairying, Exact Title of Press Release]</span>
+1. Cite using the EXACT source name as it appears in the filestore, with any file extension removed (drop .md, .pdf, etc.). Example: a file named `local_welfare_review_2021.pdf` is cited as `local_welfare_review_2021`.
+2. EXCEPTION — PIB sources: any source file named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`) is a yearly collection of press releases from the Government of India Press Information Bureau (PIB). These files must NEVER be cited by filename. Because one file holds many releases, each must instead be cited as: [Date of release, Ministry of Fisheries, Animal Husbandry & Dairying, Exact Title of Press Release, PIB] — with the date and title extracted from the specific release within the file.
+3. Every specific detail, claim, statistic, or pivotal finding MUST carry a citation, wrapped exactly like this: <span style="color: #888888;">[citation]</span>
+4. If citing multiple sources for one claim, separate them with a semicolon inside a single span: <span style="color: #888888;">[source_one; source_two]</span>
 5. When in doubt, cite the source."""
 
 
@@ -220,10 +220,9 @@ def generate_answer(state: InterviewState):
     1. You have NO knowledge outside of the files in your internal vaults.
     2. If the answer is not in the files, say EXACTLY: "The internal vaults do not contain this information."
     3. Do not use your own training data to fill in gaps.
-    4. CORROBORATION PROTOCOL: You MUST actively cross-reference findings. The official Indian government press releases are stored in the files named `fisheries_releases_20XX.md` (Note: These files contain ALL data for the Ministry of Fisheries, Animal Husbandry & Dairying). 
-    5. For every major claim found in an academic/advocacy file, you MUST explicitly search the `fisheries_releases` files and state whether the government corroborates, contradicts, or ignores the issue.
-    6. METADATA REQUIREMENT: To properly cite sources, you MUST extract the Date, Author, and Title from the documents you are reading. 
-    
+    4. CORROBORATION PROTOCOL: You MUST actively cross-reference findings. The official Indian government press releases are stored in the files named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`). For every major claim found in an academic/advocacy file, you MUST check those PIB files and state whether the government corroborates, contradicts, or ignores the issue.
+    5. PIB METADATA: For any claim drawn from a `fisheries_releases_<year>` file, you MUST extract the date of release and the exact title of the specific press release — these are required for its citation (see citation rules below), because the filename cannot serve as the citation. For all non-PIB sources, the citation is just the filename, so no metadata extraction is needed.
+
     {GLOBAL_CITATION_RULES}
     """
 
@@ -310,7 +309,7 @@ Make your title engaging based upon the focus area: {focus}
 CRITICAL RULES:
 1. Write from a completely objective, third-person view.
 2. DO NOT mention the interviewer, the expert, or any of the AI persona names in your text.
-3. You MUST keep the exact inline citations used in the interview (e.g., [filename.pdf]). Do not change, hide, or rename them.
+3. You MUST preserve every inline citation from the interview EXACTLY as written — including the <span> wrapper and its contents. Never reformat, rename, shorten, or drop a citation.
 4. NEVER summarise away numeric or statistical data. Preserve all figures, percentages, currency values, and multipliers exactly as stated."""
 
 def write_section(state: InterviewState):
@@ -603,12 +602,14 @@ def finalize_report(state: ResearchGraphState):
     players = state.get("players_section", "")
     topic = state["topic"]
 
-    # Extract sources from all sections using the new HTML span regex
+    # Collect every citation from all sections (matches the colored-span wrapper)
     all_sources = set()
     for section_text in [evidence, gaps, opportunities, players]:
-        # This catches anything inside our colored brackets
         found = re.findall(r'<span style="color: #[0-9a-fA-F]+;">\[(.*?)\]</span>', section_text)
-        all_sources.update(found)
+        for f in found:
+            # a single span may hold semicolon-separated sources — split them out
+            for one in f.split(";"):
+                all_sources.add(one.strip())
 
     sources_list = "\n".join(f"- {s}" for s in sorted(all_sources)) if all_sources else "- No sources cited"
 
