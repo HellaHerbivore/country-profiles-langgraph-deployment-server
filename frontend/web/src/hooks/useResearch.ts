@@ -111,7 +111,7 @@ export function useResearch() {
     dispatch({ type: "RESET" });
   }, []);
 
-  const start = useCallback(async (topic: string, analysts: number) => {
+  const start = useCallback(async (topic: string, analysts: number, selectedStores: string[]) => {
     if (runningRef.current) return;
     const trimmed = topic.trim();
     if (!trimmed) {
@@ -120,6 +120,10 @@ export function useResearch() {
     }
     if (isNaN(analysts) || analysts < 1 || analysts > 6) {
       dispatch({ type: "ERROR", message: "Number of analysts must be between 1 and 6." });
+      return;
+    }
+    if (!selectedStores || selectedStores.length === 0) {
+      dispatch({ type: "ERROR", message: "Please select at least one source." });
       return;
     }
 
@@ -150,7 +154,7 @@ export function useResearch() {
       dispatch({ type: "STATUS", status: "Running research pipeline..." });
       const fullContent = await withRetry(
         () =>
-          streamResearch(threadId, trimmed, analysts, {
+          streamResearch(threadId, trimmed, analysts, selectedStores, {
             onProgress: (percent, detail) => {
               dispatch({ type: "PROGRESS", percent, statusText: detail });
               if (detail) dispatch({ type: "LOG", text: detail });

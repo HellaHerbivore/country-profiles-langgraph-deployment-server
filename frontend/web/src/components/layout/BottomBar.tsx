@@ -7,7 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { SAMPLE_TOPICS } from "@/lib/sample-topics";
 import { useResearchContext } from "@/hooks/ResearchContext";
 
-export function BottomBar() {
+type BottomBarProps = {
+  selectedStores: string[];
+};
+
+export function BottomBar({ selectedStores }: BottomBarProps) {
   const { state, start } = useResearchContext();
   const [topic, setTopic] = useState("");
   const [analysts, setAnalysts] = useState(3);
@@ -15,7 +19,8 @@ export function BottomBar() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const disabled = state.phase === "loading" || state.phase === "streaming";
-  const canSubmit = !disabled && topic.trim().length > 0;
+  const hasSources = selectedStores.length > 0;
+  const canSubmit = !disabled && topic.trim().length > 0 && hasSources;
 
   // Auto-resize the textarea to fit its content, capped at 40vh.
   // Past that cap the textarea's native scrollbar kicks in and the
@@ -37,8 +42,8 @@ export function BottomBar() {
 
   const onGenerate = useCallback(() => {
     if (!canSubmit) return;
-    start(topic, analysts);
-  }, [canSubmit, start, topic, analysts]);
+    start(topic, analysts, selectedStores);
+  }, [canSubmit, start, topic, analysts, selectedStores]);
 
   return (
     <div className="px-4 pb-4 pt-2 sm:px-8 md:px-12 lg:px-16">
@@ -93,6 +98,7 @@ export function BottomBar() {
             onClick={onGenerate}
             disabled={!canSubmit}
             aria-label="Generate"
+            title={!hasSources ? "Select at least one source to begin" : undefined}
             className="h-14 w-14 shrink-0 rounded-full [&_svg]:size-6"
           >
             <ArrowRight />
