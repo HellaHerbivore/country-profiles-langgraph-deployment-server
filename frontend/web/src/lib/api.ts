@@ -174,6 +174,7 @@ export async function streamResearch(
   threadId: string,
   topic: string,
   maxAnalysts: number,
+  selectedStores: string[],
   callbacks: StreamCallbacks = {},
 ): Promise<string> {
   const resp = await fetch(`${CONFIG.SERVER_URL}/threads/${threadId}/runs/stream`, {
@@ -184,6 +185,7 @@ export async function streamResearch(
       input: {
         topic,
         max_analysts: maxAnalysts,
+        selected_stores: selectedStores,
       },
       config: {
         recursion_limit: 100,

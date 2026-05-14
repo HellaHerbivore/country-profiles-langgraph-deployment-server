@@ -22,25 +22,44 @@ export function SourcesList({ checked, onToggle }: SourcesListProps) {
       <Separator />
       <ScrollArea className="-mx-2 flex-1 px-2">
         <div className="flex flex-col gap-1.5 pb-2">
-          {SOURCES.map((source) => (
-            <label
-              key={source.id}
-              htmlFor={`source-${source.id}`}
-              className="flex cursor-pointer items-center gap-3 rounded-md border border-border/60 bg-card/60 px-3 py-2.5 text-sm transition-colors hover:bg-accent/10"
-            >
-              <Checkbox
-                id={`source-${source.id}`}
-                checked={!!checked[source.id]}
-                onCheckedChange={() => onToggle(source.id)}
-              />
-              <Label
+          {SOURCES.map((source) => {
+            const disabled = source.comingSoon;
+            return (
+              <label
+                key={source.id}
                 htmlFor={`source-${source.id}`}
-                className="cursor-pointer font-normal text-foreground"
+                className={
+                  disabled
+                    ? "flex cursor-not-allowed items-center gap-3 rounded-md border border-border/60 bg-card/60 px-3 py-2.5 text-sm opacity-50"
+                    : "flex cursor-pointer items-center gap-3 rounded-md border border-border/60 bg-card/60 px-3 py-2.5 text-sm transition-colors hover:bg-accent/10"
+                }
               >
-                {source.label}
-              </Label>
-            </label>
-          ))}
+                <Checkbox
+                  id={`source-${source.id}`}
+                  checked={!disabled && !!checked[source.id]}
+                  disabled={disabled}
+                  onCheckedChange={() => {
+                    if (!disabled) onToggle(source.id);
+                  }}
+                />
+                <Label
+                  htmlFor={`source-${source.id}`}
+                  className={
+                    disabled
+                      ? "flex flex-1 cursor-not-allowed items-center justify-between font-normal text-foreground"
+                      : "cursor-pointer font-normal text-foreground"
+                  }
+                >
+                  <span>{source.label}</span>
+                  {disabled && (
+                    <span className="ml-2 shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      coming soon
+                    </span>
+                  )}
+                </Label>
+              </label>
+            );
+          })}
         </div>
       </ScrollArea>
     </div>

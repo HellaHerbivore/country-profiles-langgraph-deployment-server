@@ -41,7 +41,7 @@ export function AppShell() {
               {showReport && <ReportSurface />}
             </div>
           </div>
-          <BottomBar />
+          <BottomBar selectedStores={sources.storeKeys} />
         </main>
 
         <ActivitySidebar />
