@@ -204,6 +204,8 @@ def plan_research(state: ResearchGraphState):
     selected = [s for s in selected if s in STORE_REGISTRY]
     if not selected:
         selected = list(STORE_REGISTRY.keys())
+        
+    print(f"[plan_research] state.selected_stores={state.get('selected_stores')} → filtered={selected}")
 
     store_menu = "\n".join(f"- {key}: {STORE_REGISTRY[key][1]}" for key in selected)
 
@@ -317,6 +319,8 @@ def generate_answer(state: InterviewState):
 
     primary_id = STORE_REGISTRY[primary][0]
     active_store_ids = [STORE_REGISTRY[k][0] for k in selected]
+
+    print(f"[generate_answer] research_plan.selected={selected}, active_store_ids={active_store_ids}")
 
     primary_desc = STORE_REGISTRY[primary][1]
     secondary_desc = "\n".join(f"    - {STORE_REGISTRY[k][1]}" for k in secondary) or "    - (none — only the primary store is selected)"
