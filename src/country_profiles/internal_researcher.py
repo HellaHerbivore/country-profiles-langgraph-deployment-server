@@ -474,7 +474,7 @@ def initiate_all_interviews(state: ResearchGraphState):
     interview_research_plan = state.get("research_plan", {})
     return [Send("conduct_interview", {
         "analyst": analyst,
-        "research_plan": interview_research_plan,
+        "interview_research_plan": interview_research_plan,
         "messages": [HumanMessage(
             content=f"We are building a Strategic Country Profile for {topic}. As our {analyst.name}, identify the key advocacy bottlenecks and windows of opportunity in your specialized area."
         )]
