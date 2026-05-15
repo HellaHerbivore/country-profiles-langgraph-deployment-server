@@ -58,6 +58,23 @@ INDIA_DATA_POINTS = ["1.4B population", "~4.5B Land Animals/Year", "62 FAOI", "3
 # ---------------------------------------------------------------------------
 # 1c. Global Rules
 # ---------------------------------------------------------------------------
+GOODGROWTH_LESSONS = """GOOD GROWTH FRAMING — LESSONS FROM FIELD EXPERIENCE:
+These lessons are derived from a study of food systems advocacy campaigns in India. Use them as the analytical lens for identifying actionable opportunities — every opportunity you surface should connect to at least one of these.
+
+For advocates / charities:
+1. Contextual homework before launch: campaigns stalled when political timing, enforcement gaps, religious sensitivities, or public sentiment surfaced mid-campaign. A structured pre-launch scan of political climate, regulatory reliability, and the cultural calendar surfaces risk early.
+2. Honest internal readiness check: organisations discovered missing infrastructure (follow-up capacity, lead capture, staffing) only after launch. A staffing/skills/funding/decision-making check before finalising scope right-sizes the campaign.
+3. Take social identity and economic realities seriously: caste, religion, hunger, livelihoods, and price sensitivity shape what audiences find acceptable — they must be deliberately factored into messages, messengers, and partners.
+4. Don't treat stakeholders as fixed obstacles: government, industry, and the public are often wrongly seen as immovable. Stakeholder mapping can reveal alternative engagement strategies — smaller/medium producers, or turning backlash into an opening.
+5. Turn experience into reusable knowledge: lessons were usually only articulated after campaigns ended. Milestone and post-campaign debriefs convert ad hoc memory into reusable knowledge.
+6. Use peer spaces for practical knowledge-sharing: low-burden exchanges (short calls, shared templates, peer circles) help smaller and volunteer-led groups swap knowledge on enforcement, coalitions, and capacity.
+
+For funders:
+1. Budget for structured contextual reflection, not just activity: fund time for environmental scans and integrating findings into plans before launch.
+2. Invest in peer learning with smaller organisations in mind: fund shared spaces, mentoring, and convenings so regional and smaller groups can participate, not only large ones.
+3. Be patient and flexible in sensitive contexts: where caste, religion, dairy livelihoods, and hunger are salient, iterative testing and relationship-building take time — support pilots, don't penalise course corrections."""
+
+
 GLOBAL_CITATION_RULES = """CITATION RULES:
 1. Cite using the EXACT source name as it appears in the filestore, with any file extension removed (drop .md, .pdf, etc.). Example: a file named `local_welfare_review_2021.pdf` is cited as `local_welfare_review_2021`.
 2. EXCEPTION — PIB sources: any source file named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`) is a yearly collection of press releases from the Government of India Press Information Bureau (PIB). These files must NEVER be cited by filename. Because one file holds many releases, each must instead be cited as: [Date of release, Ministry of Fisheries, Animal Husbandry & Dairying, Exact Title of Press Release, PIB] — with the date and title extracted from the specific release within the file.
@@ -561,6 +578,8 @@ CRITICAL RULES:
 1. Present this as a unified, objective briefing. DO NOT mention any AI analyst names, interviewers, or experts.
 2. NEVER summarise away numeric or statistical data. Every figure, percentage, currency value, multiplier, or statistic from the memos MUST appear in your output exactly as stated.
 3. Preserve highly insightful information verbatim — do not water down sharp observations.
+4. The memos contain explicit corroboration findings (where sources agree or contradict each other). Extract and foreground these — when multiple sources corroborate a claim, say so; when they conflict, present the conflict rather than picking a side.
+5. You are receiving the full set of interview memos. Pull only what speaks to what the evidence SAYS — leave gaps, opportunities, and player mapping to the other sections.
 
 {citation_rules}
 
@@ -602,6 +621,8 @@ INSTRUCTIONS:
 4. Think about: Are there stakeholder perspectives missing? Geographic blind spots? Temporal gaps (outdated data)? Methodological limitations?
 5. DO NOT mention any AI analyst names, interviewers, or experts.
 6. Preserve any numeric data that contextualizes a gap.
+7. The memos contain explicit GAP findings flagged during research (where the primary source raised something the secondary sources were silent on). Extract these flagged gaps directly — they are the backbone of this section — and supplement them with any further gaps you identify.
+8. You are receiving the full set of interview memos. Pull only what speaks to what is MISSING or unanswered — leave confirmed evidence, opportunities, and player mapping to the other sections.
 
 {citation_rules}
 
@@ -634,15 +655,19 @@ def write_gaps(state: ResearchGraphState):
 
 opportunities_instructions = """You are a strategic analyst writing the "Windows of Opportunity" section of a briefing for: {topic}.
 
-You will receive research memos gathered from internal document vaults. Your job is to identify time-sensitive opportunities or crises that the animal advocacy movement should tackle quickly.
+You will receive research memos gathered from internal document vaults. Your job is to identify time-sensitive opportunities the animal advocacy movement should act on, framed through the lessons below.
+
+{goodgrowth_lessons}
 
 INSTRUCTIONS:
-1. Focus on windows that could CLOSE — emerging leverage points, policy moments, market shifts, electoral cycles, public attention spikes, or crises requiring immediate response.
-2. Ground every opportunity in specific evidence from the memos. Do not speculate beyond what the data supports.
-3. Be concrete about WHY the window is time-sensitive — what makes it urgent?
-4. NEVER summarise away numeric or statistical data. Preserve all figures exactly.
-5. DO NOT mention any AI analyst names, interviewers, or experts.
-6. If the evidence does not clearly indicate time-sensitive opportunities, say so transparently rather than fabricating urgency.
+1. Anchor every opportunity in the Good Growth lessons above — for each opportunity, make explicit which lesson(s) it draws on (e.g. a regulatory opening connects to "contextual homework"; a coalition opening connects to "peer spaces" or "stakeholders aren't fixed obstacles").
+2. Be concrete about LEVERS: name the specific thing an advocate or funder could actually do — a policy moment to act on, a producer segment to engage, a coalition to build, a debrief practice to fund.
+3. Where the memos name on-the-ground organisations, community leaders, or producers, identify them as potential COLLABORATORS and say what role they could play.
+4. Focus on windows that could CLOSE — emerging leverage points, policy moments, market shifts, electoral cycles, attention spikes, crises requiring response. Be concrete about WHY each is time-sensitive.
+5. FAVOUR RECENT DATA: when memos conflict or span different time periods, weight the most recent evidence most heavily, and note when an opportunity rests on older data that may have shifted.
+6. Ground every opportunity in specific evidence from the memos. Do not speculate beyond what the data supports. If the evidence does not indicate time-sensitive opportunities, say so transparently rather than fabricating urgency.
+7. NEVER summarise away numeric or statistical data. Preserve all figures exactly.
+8. DO NOT mention any AI analyst names, interviewers, or experts.
 
 {citation_rules}
 
@@ -655,8 +680,9 @@ def write_opportunities(state: ResearchGraphState):
     topic = state["topic"]
 
     system_message = opportunities_instructions.format(
-        topic=topic, 
+        topic=topic,
         context=content,
+        goodgrowth_lessons=GOODGROWTH_LESSONS,
         citation_rules=GLOBAL_CITATION_RULES
     )
     result = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'Windows of Opportunity' section. Identify time-sensitive opportunities or crises for animal advocacy.")])
@@ -678,7 +704,7 @@ players_instructions = """You are a strategic analyst writing the "Current Playe
 You will receive research memos gathered from internal document vaults. Your job is to identify current players in the animal advocacy ecosystem relevant to the query and what they're currently up to.
 
 INSTRUCTIONS:
-1. List organisations, coalitions, government bodies, or key individuals mentioned in the evidence that are active on this topic.
+1. List organisations, coalitions, government bodies, or key individuals mentioned in the evidence that are active on this topic. Do not treat any of them as fixed or immovable — where the evidence allows, note whether a player could be an alternative ally, a smaller/medium producer worth engaging, or a source of backlash that could become a strategic opening.
 2. For each player, note what the evidence says about their current activities, positions, or campaigns.
 3. BE TRANSPARENT ABOUT LIMITATIONS: The internal document vaults may have limited information about who the current players are and what they're doing right now. If the evidence doesn't clearly identify active players, say so explicitly. Do NOT invent or assume what organisations are doing.
 4. DO NOT mention any AI analyst names, interviewers, or experts.
