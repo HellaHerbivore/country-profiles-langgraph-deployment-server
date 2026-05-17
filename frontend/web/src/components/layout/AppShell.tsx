@@ -19,7 +19,10 @@ export function AppShell() {
   const sources = useSources();
   const { state } = useResearchContext();
 
-  const showLoading = state.phase === "loading" || state.phase === "streaming";
+  const showLoading =
+    state.phase === "loading" ||
+    state.phase === "streaming" ||
+    state.phase === "aborted";
   const showReport = state.phase === "done" && state.reportHtml;
 
   return (

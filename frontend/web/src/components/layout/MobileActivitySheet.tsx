@@ -16,7 +16,7 @@ export function MobileActivitySheet({ open, onOpenChange }: MobileActivitySheetP
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="panel-activity flex w-4/5 max-w-sm flex-col p-0 pt-10">
         <SheetHeader className="sr-only">
-          <SheetTitle>Research activity</SheetTitle>
+          <SheetTitle>Sources used</SheetTitle>
         </SheetHeader>
         <ActivitySidebarContent />
       </SheetContent>
