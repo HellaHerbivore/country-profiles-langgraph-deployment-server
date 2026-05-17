@@ -112,6 +112,7 @@ class InterviewState(MessagesState):
     interview_research_plan: dict
     interview: str
     sections: list
+    interview_signals: Annotated[list, operator.add]
 
 class ResearchGraphState(TypedDict):
     topic: str
@@ -128,11 +129,128 @@ class ResearchGraphState(TypedDict):
     players_section: str
     messages: Annotated[list, operator.add]
     final_report: str
+    interview_signals: Annotated[list, operator.add]
+    # layers_briefing: str
 
 
 # ---------------------------------------------------------------------------
-# 3. Work Nodes (The Steps)
+# 2b. Streaming helpers (user-facing source formatting)
 # ---------------------------------------------------------------------------
+def _join_with_and(items: list[str]) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
+
+
+def _format_source_names(sources: list[str]) -> list[str]:
+    """Apply the script's citation rules to raw filenames for user-facing display:
+    drop extensions on normal files; collapse fisheries_releases_<year> files into
+    a 'PIB releases from <year>' label without surfacing the raw filename."""
+    normal: list[str] = []
+    pib_years: set[str] = set()
+    seen_normal: set[str] = set()
+    for raw in sources:
+        if not raw:
+            continue
+        name = re.sub(r"\.(md|pdf|txt|docx?)$", "", raw, flags=re.IGNORECASE)
+        pib_match = re.match(r"fisheries_releases_(\d{4})", name)
+        if pib_match:
+            pib_years.add(pib_match.group(1))
+            continue
+        if name not in seen_normal:
+            seen_normal.add(name)
+            normal.append(name)
+    result = list(normal)
+    if pib_years:
+        result.append(f"PIB releases from {_join_with_and(sorted(pib_years))}")
+    return result
+
+
+def _extract_consulted_sources(response) -> list[str]:
+    """Pull file display names out of the Gemini File Search grounding metadata.
+    Defensive against SDK shape changes — returns [] on any unexpected structure."""
+    sources: list[str] = []
+    seen: set[str] = set()
+    try:
+        grounding = response.candidates[0].grounding_metadata
+        if not grounding:
+            return sources
+        chunks = getattr(grounding, "grounding_chunks", None) or []
+        for chunk in chunks:
+            rc = getattr(chunk, "retrieved_context", None)
+            if not rc:
+                continue
+            name = getattr(rc, "title", None) or getattr(rc, "uri", None)
+            if name and name not in seen:
+                seen.add(name)
+                sources.append(name)
+    except (AttributeError, IndexError, TypeError):
+        pass
+    return sources
+
+
+# ---------------------------------------------------------------------------
+# 2b. Streaming helpers (user-facing source formatting)
+# ---------------------------------------------------------------------------
+
+# # --- 3a. Layers Briefing (static macro + dynamic meso/micro/hidden) ---
+
+# layers_briefing_instructions = """You are a strategic analyst for animal advocacy. Given the research topic below, provide a brief (2–4 sentences each) overview of the actors and forces of change at three levels:
+
+# - **Meso**: Sector and institutional forces relevant to this topic — industry associations, professional bodies, regional government, large NGOs, media networks, religious institutions operating at organisational scale.
+# - **Micro**: Ground-level and individual forces — grassroots organisations, community leaders, individual consumers, local activists, household-level dynamics, frontline workers.
+# - **Hidden**: Forces that are present but easily overlooked — informal economies, unregulated supply chains, cultural taboos, data gaps, silent stakeholders, unintended policy side-effects.
+
+# Bold the 1–2 most important phrases per level using markdown **bold**.
+# Respond as JSON with keys: meso, micro, hidden."""
+
+# def generate_layers_briefing(state: ResearchGraphState):
+#     topic = state.get("topic")
+#     if not topic and state.get("messages"):
+#         topic = state["messages"][-1].content
+
+#     result = llm.invoke([
+#         SystemMessage(content=layers_briefing_instructions),
+#         HumanMessage(content=f"Topic: {topic}")
+#     ])
+
+#     content = result.content
+#     if isinstance(content, list):
+#         content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
+#     else:
+#         content = str(content)
+
+#     content = content.strip()
+#     if content.startswith("```"):
+#         content = re.sub(r'^```(?:json)?\s*', '', content)
+#         content = re.sub(r'\s*```$', '', content)
+
+#     # Parse dynamic layers and combine with static macro
+#     try:
+#         dynamic_layers = json.loads(content)
+#     except json.JSONDecodeError:
+#         dynamic_layers = {"meso": content, "micro": "", "hidden": ""}
+
+#     full_briefing = json.dumps({
+#         "macro_statement": INDIA_MACRO_STATEMENT,
+#         "data_points": INDIA_DATA_POINTS,
+#         "meso": dynamic_layers.get("meso", ""),
+#         "micro": dynamic_layers.get("micro", ""),
+#         "hidden": dynamic_layers.get("hidden", ""),
+#     })
+
+#     return {
+#         "layers_briefing": full_briefing,
+#         "topic": topic,
+#         "messages": [AIMessage(
+#             content=f"[LAYERS_BRIEFING]{full_briefing}",
+#             name="System"
+#         )]
+#     }
 
 # --- 3a. Research Planning ---
 
@@ -208,7 +326,7 @@ def plan_research(state: ResearchGraphState):
         "topic": topic,
         "selected_stores": selected,
         "messages": [AIMessage(
-            content=f"[PROGRESS:10] Research plan ready\n\n**How I'll approach this:** {plan.get('brief', '')}",
+            content=f"[PROGRESS:10] Mapped out the approach.\n\n**How I'll approach this:** {plan.get('brief', '')}",
             name="System"
         )]
     }
@@ -239,12 +357,16 @@ def create_analysts(state: ResearchGraphState):
     raw_res = structured_llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Generate the set of analysts.")])
     perspectives_res = cast(Perspectives, raw_res)
 
+    angles = [a.role for a in perspectives_res.analysts]
     return {
         "analysts": perspectives_res.analysts,
         "topic": topic,
         "max_analysts": max_analysts,
         "messages": [
-            AIMessage(content=f"[PROGRESS:15] Created {len(perspectives_res.analysts)} analysts: {', '.join(a.role for a in perspectives_res.analysts)}", name="System")
+            AIMessage(
+                content=f"[PROGRESS:15] Mapped out the angles to investigate.\n\nLooking at: {_join_with_and(angles)}.",
+                name="System"
+            )
         ]
     }
 
@@ -341,26 +463,46 @@ def generate_answer(state: InterviewState):
                 time.sleep(3)
             else:
                 print("Server is fully down. Moving on without this answer.")
-                return {"messages": [AIMessage(content="FLAG_NO_KNOWLEDGE", name="expert")]}
+                return {
+                    "messages": [AIMessage(content="FLAG_NO_KNOWLEDGE", name="expert")],
+                    "interview_signals": [{
+                        "role": analyst.role,
+                        "sources": [],
+                        "no_knowledge": True,
+                    }],
+                }
 
     if response and response.text:
         answer_text = response.text
     else:
         answer_text = "The internal vaults do not contain this information."
 
-    used_files = False
-    if response and response.candidates and response.candidates[0].grounding_metadata:
-        used_files = True
+    consulted_sources = _extract_consulted_sources(response) if response else []
+    used_files = bool(consulted_sources) or (
+        response is not None
+        and response.candidates
+        and response.candidates[0].grounding_metadata is not None
+    )
 
     print(f"\n🧠 --- RAW EXPERT ANSWER ---")
     print(answer_text)
     print(f"\n✅ [TRIGGER] Did the Expert use internal files? -> {used_files}")
+    if consulted_sources:
+        print(f"📚 [SOURCES] Consulted: {consulted_sources}")
     print("---------------------------------------------------\n")
 
     if not used_files or "do not contain this information" in answer_text.lower():
         answer_text = "FLAG_NO_KNOWLEDGE"
 
-    return {"messages": [AIMessage(content=answer_text, name="expert")]}
+    no_knowledge = (answer_text == "FLAG_NO_KNOWLEDGE")
+    return {
+        "messages": [AIMessage(content=answer_text, name="expert")],
+        "interview_signals": [{
+            "role": analyst.role,
+            "sources": consulted_sources,
+            "no_knowledge": no_knowledge,
+        }],
+    }
 
 def save_interview(state: InterviewState):
     messages = state["messages"]
@@ -445,10 +587,36 @@ def initiate_all_interviews(state: ResearchGraphState):
 
 def collect_sections(state: ResearchGraphState):
     """Join point — waits for all parallel interviews to complete before checking knowledge."""
-    sections = state.get("sections", [])
-    valid = [s for s in sections if s != "FLAG_NO_KNOWLEDGE"]
+    signals = state.get("interview_signals", []) or []
+
+    all_sources: list[str] = []
+    seen_sources: set[str] = set()
+    empty_roles: list[str] = []
+    seen_empty: set[str] = set()
+    for sig in signals:
+        role = sig.get("role") or "an unspecified angle"
+        if sig.get("no_knowledge") and role not in seen_empty:
+            seen_empty.add(role)
+            empty_roles.append(role)
+        for src in sig.get("sources", []) or []:
+            if src not in seen_sources:
+                seen_sources.add(src)
+                all_sources.append(src)
+
+    formatted_sources = _format_source_names(all_sources)
+
+    parts: list[str] = ["[PROGRESS:50] Gathered evidence from the source vaults."]
+    if formatted_sources:
+        parts.append("")
+        parts.append(f"Drawing on: {_join_with_and(formatted_sources)}.")
+    for role in empty_roles:
+        parts.append("")
+        parts.append(
+            f"One investigative angle (the {role}) returned no information from the available sources."
+        )
+
     return {
-        "messages": [AIMessage(content=f"[PROGRESS:50] Interviews complete — {len(valid)} sections collected", name="System")]
+        "messages": [AIMessage(content="\n".join(parts), name="System")]
     }
 
 
@@ -480,7 +648,10 @@ def abort_report(state: ResearchGraphState):
     print("\n⚠️ ABORTED: Not enough internal knowledge.\n")
     return {
         "final_report": final_message,
-        "messages": [AIMessage(content="[PROGRESS:ABORTED] Not enough internal knowledge to generate report", name="System")]
+        "messages": [AIMessage(
+            content="[PROGRESS:ABORTED] Not enough information in the available source vaults to produce a confident briefing on this topic.",
+            name="System"
+        )]
     }
 
 
@@ -507,7 +678,10 @@ def prepare_writing(state: ResearchGraphState):
 
     return {
         "content": formatted_str_sections,
-        "messages": [AIMessage(content="[PROGRESS:55] Preparing report sections...", name="System")]
+        "messages": [AIMessage(
+            content="[PROGRESS:55] Drafting the briefing — synthesizing evidence, gaps, opportunities, and players in parallel.",
+            name="System"
+        )]
     }
 
 
@@ -554,7 +728,6 @@ def write_evidence(state: ResearchGraphState):
 
     return {
         "evidence_section": text,
-        "messages": [AIMessage(content="[PROGRESS:70] Evidence section complete", name="System")]
     }
 
 
@@ -600,7 +773,6 @@ def write_gaps(state: ResearchGraphState):
 
     return {
         "gaps_section": text,
-        "messages": [AIMessage(content="[PROGRESS:75] Gaps section complete", name="System")]
     }
 
 
@@ -649,7 +821,6 @@ def write_opportunities(state: ResearchGraphState):
 
     return {
         "opportunities_section": text,
-        "messages": [AIMessage(content="[PROGRESS:80] Opportunities section complete", name="System")]
     }
 
 
@@ -693,7 +864,6 @@ def write_players(state: ResearchGraphState):
 
     return {
         "players_section": text,
-        "messages": [AIMessage(content="[PROGRESS:85] Players section complete", name="System")]
     }
 
 
@@ -770,7 +940,7 @@ def finalize_report(state: ResearchGraphState):
     return {
         "final_report": final_report_str,
         "messages": [AIMessage(
-            content=f"[PROGRESS:100] Complete\n\n{final_report_str}",
+            content=f"[PROGRESS:100] Briefing complete.\n\n{final_report_str}",
             name="System"
         )]
     }
