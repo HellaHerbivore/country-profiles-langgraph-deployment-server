@@ -189,7 +189,7 @@ export async function streamResearch(
         recursion_limit: 100,
       },
       stream_mode: "messages-tuple",
-      stream_subgraphs: false,
+      stream_subgraphs: true,
     }),
   });
 

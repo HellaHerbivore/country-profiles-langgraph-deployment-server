@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Loader2 } from "lucide-react";
 
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,11 +29,16 @@ export function LoadingState() {
 
       {/* Progress */}
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-foreground">{status}</span>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <div className="flex min-w-0 items-center gap-2">
+            {!progress.aborted && (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+            )}
+            <span className="truncate font-medium text-foreground">{status}</span>
+          </div>
           <span
             className={cn(
-              "text-xs font-semibold",
+              "shrink-0 text-xs font-semibold",
               progress.aborted ? "text-destructive" : "text-primary",
             )}
           >

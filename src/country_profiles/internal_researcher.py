@@ -193,6 +193,15 @@ def _extract_consulted_sources(response) -> list[str]:
     return sources
 
 
+def _strip_system_messages(messages: list) -> list:
+    """Drop progress/status emits before sending chat history to an analyst or expert LLM —
+    those messages are for the user, not the conversation."""
+    return [
+        m for m in messages
+        if not (isinstance(m, AIMessage) and getattr(m, "name", None) == "System")
+    ]
+
+
 # --- 3a. Research Planning ---
 
 research_plan_instructions = """You are the lead researcher planning how to investigate a topic for an animal advocacy strategic briefing.
@@ -323,7 +332,11 @@ def create_analysts(state: ResearchGraphState):
             AIMessage(
                 content=f"[PROGRESS:15] Mapped out the angles to investigate.\n\nLooking at: {_join_with_and(angles)}.",
                 name="System"
-            )
+            ),
+            AIMessage(
+                content="[PROGRESS:18] Starting deep research across the source vaults. This is the slow part — each angle is checked against multiple stores.",
+                name="System"
+            ),
         ]
     }
 
@@ -335,7 +348,7 @@ Here is your topic of focus and set of goals: {goals}"""
 
 def generate_question(state: InterviewState):
     analyst = state["analyst"]
-    messages = state["messages"]
+    messages = _strip_system_messages(state["messages"])
 
     system_message = question_instructions.format(goals=analyst.persona)
     question = llm.invoke([SystemMessage(content=system_message)] + messages)
@@ -344,7 +357,7 @@ def generate_question(state: InterviewState):
 def generate_answer(state: InterviewState):
     """Answers questions strictly using internal vaults via Gemini File Search."""
     analyst = state["analyst"]
-    messages = state["messages"]
+    messages = _strip_system_messages(state["messages"])
     research_plan = state.get("interview_research_plan", {}) or {}
 
     selected = research_plan.get("selected_stores") or DEFAULT_SELECTED_STORES
@@ -420,8 +433,15 @@ def generate_answer(state: InterviewState):
                 time.sleep(3)
             else:
                 print("Server is fully down. Moving on without this answer.")
+                fail_signal = AIMessage(
+                    content=f"[PROGRESS:30] The {analyst.role} angle could not be checked — the source vault was unreachable.",
+                    name="System",
+                )
                 return {
-                    "messages": [AIMessage(content="FLAG_NO_KNOWLEDGE", name="expert")],
+                    "messages": [
+                        fail_signal,
+                        AIMessage(content="FLAG_NO_KNOWLEDGE", name="expert"),
+                    ],
                     "interview_signals": [{
                         "role": analyst.role,
                         "sources": [],
@@ -452,8 +472,31 @@ def generate_answer(state: InterviewState):
         answer_text = "FLAG_NO_KNOWLEDGE"
 
     no_knowledge = (answer_text == "FLAG_NO_KNOWLEDGE")
+
+    # User-facing progress emit — what sources this turn actually pulled from.
+    formatted_sources = _format_source_names(consulted_sources)
+    if no_knowledge:
+        signal_text = (
+            f"[PROGRESS:30] No information found for the {analyst.role} angle "
+            f"in the available source vaults."
+        )
+    elif formatted_sources:
+        signal_text = (
+            f"[PROGRESS:30] Consulted {_join_with_and(formatted_sources)} "
+            f"for the {analyst.role} angle."
+        )
+    else:
+        signal_text = (
+            f"[PROGRESS:30] Returned information for the {analyst.role} angle "
+            f"(specific sources not surfaced)."
+        )
+    signal_msg = AIMessage(content=signal_text, name="System")
+
     return {
-        "messages": [AIMessage(content=answer_text, name="expert")],
+        "messages": [
+            signal_msg,
+            AIMessage(content=answer_text, name="expert"),
+        ],
         "interview_signals": [{
             "role": analyst.role,
             "sources": consulted_sources,
@@ -478,8 +521,14 @@ def route_messages(state: InterviewState, name: str = "expert"):
     if num_responses >= max_num_turns:
         return 'save_interview'
 
-    last_question = messages[-2]
-    if "Thank you so much for your help" in last_question.content:
+    last_question = None
+    for m in reversed(messages[:-1]):
+        if isinstance(m, AIMessage) and getattr(m, "name", None) in (name, "System"):
+            continue
+        last_question = m
+        break
+
+    if last_question and "Thank you so much for your help" in str(last_question.content):
         return 'save_interview'
 
     return "ask_question"
