@@ -173,7 +173,6 @@ export type StreamCallbacks = {
 export async function streamResearch(
   threadId: string,
   topic: string,
-  maxAnalysts: number,
   selectedStores: string[],
   callbacks: StreamCallbacks = {},
 ): Promise<string> {
@@ -184,7 +183,6 @@ export async function streamResearch(
       assistant_id: CONFIG.ASSISTANT_ID,
       input: {
         topic,
-        max_analysts: maxAnalysts,
         selected_stores: selectedStores,
       },
       config: {

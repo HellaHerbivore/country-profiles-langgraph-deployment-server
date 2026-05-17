@@ -17,7 +17,6 @@ export type LayersBriefing = {
 export type ResearchState = {
   phase: ResearchPhase;
   topic: string;
-  analysts: number;
   progress: {
     percent: number;
     statusText: string;
@@ -34,7 +33,6 @@ export type ResearchState = {
 export const initialResearchState: ResearchState = {
   phase: "idle",
   topic: "",
-  analysts: 3,
   progress: { percent: 0, statusText: "", aborted: false },
   status: "",
   logs: [],

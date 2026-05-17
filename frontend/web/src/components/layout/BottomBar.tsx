@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Dice5 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SAMPLE_TOPICS } from "@/lib/sample-topics";
 import { useResearchContext } from "@/hooks/ResearchContext";
@@ -14,7 +13,6 @@ type BottomBarProps = {
 export function BottomBar({ selectedStores }: BottomBarProps) {
   const { state, start } = useResearchContext();
   const [topic, setTopic] = useState("");
-  const [analysts, setAnalysts] = useState(3);
   const topicIndexRef = useRef(-1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -42,8 +40,8 @@ export function BottomBar({ selectedStores }: BottomBarProps) {
 
   const onGenerate = useCallback(() => {
     if (!canSubmit) return;
-    start(topic, analysts, selectedStores);
-  }, [canSubmit, start, topic, analysts, selectedStores]);
+    start(topic, selectedStores);
+  }, [canSubmit, start, topic, selectedStores]);
 
   return (
     <div className="px-4 pb-4 pt-2 sm:px-8 md:px-12 lg:px-16">
@@ -75,24 +73,6 @@ export function BottomBar({ selectedStores }: BottomBarProps) {
               }
             }}
           />
-          <div className="flex shrink-0 items-center gap-2 pb-1.5 pl-1">
-            <label
-              htmlFor="max-analysts"
-              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Analysts
-            </label>
-            <Input
-              id="max-analysts"
-              type="number"
-              min={1}
-              max={6}
-              value={analysts}
-              onChange={(e) => setAnalysts(parseInt(e.target.value, 10) || 1)}
-              disabled={disabled}
-              className="h-11 w-16 text-center text-base"
-            />
-          </div>
           <Button
             type="button"
             onClick={onGenerate}
