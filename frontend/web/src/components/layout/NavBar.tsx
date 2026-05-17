@@ -44,7 +44,7 @@ export function NavBar({ onToggleSources, onToggleActivity }: NavBarProps) {
           size="icon"
           className="lg:hidden"
           onClick={onToggleActivity}
-          aria-label="Open research activity panel"
+          aria-label="Open sources panel"
         >
           <PanelRightOpen className="h-5 w-5" />
         </Button>
