@@ -17,7 +17,7 @@ import {
 } from "@/types/research";
 
 type Action =
-  | { type: "START"; topic: string; analysts: number }
+  | { type: "START"; topic: string }
   | { type: "STATUS"; status: string }
   | { type: "LOG"; text: string }
   | { type: "PROGRESS"; percent: number; statusText: string }
@@ -35,10 +35,9 @@ function reducer(state: ResearchState, action: Action): ResearchState {
         ...initialResearchState,
         phase: "loading",
         topic: action.topic,
-        analysts: action.analysts,
         layersLoading: true,
         status: "Creating research thread...",
-        logs: [`Topic: ${action.topic}`, `Analysts: ${action.analysts}`],
+        logs: [`Topic: ${action.topic}`],
       };
     case "STATUS":
       return { ...state, status: action.status };
@@ -111,15 +110,11 @@ export function useResearch() {
     dispatch({ type: "RESET" });
   }, []);
 
-  const start = useCallback(async (topic: string, analysts: number, selectedStores: string[]) => {
+  const start = useCallback(async (topic: string, selectedStores: string[]) => {
     if (runningRef.current) return;
     const trimmed = topic.trim();
     if (!trimmed) {
       dispatch({ type: "ERROR", message: "Please enter a research topic." });
-      return;
-    }
-    if (isNaN(analysts) || analysts < 1 || analysts > 6) {
-      dispatch({ type: "ERROR", message: "Number of analysts must be between 1 and 6." });
       return;
     }
     if (!selectedStores || selectedStores.length === 0) {
@@ -128,7 +123,7 @@ export function useResearch() {
     }
 
     runningRef.current = true;
-    dispatch({ type: "START", topic: trimmed, analysts });
+    dispatch({ type: "START", topic: trimmed });
 
     try {
       const serverReady = await wakeUpServer((statusText) => {
@@ -154,7 +149,7 @@ export function useResearch() {
       dispatch({ type: "STATUS", status: "Running research pipeline..." });
       const fullContent = await withRetry(
         () =>
-          streamResearch(threadId, trimmed, analysts, selectedStores, {
+          streamResearch(threadId, trimmed, selectedStores, {
             onProgress: (percent, detail) => {
               dispatch({ type: "PROGRESS", percent, statusText: detail });
               if (detail) dispatch({ type: "LOG", text: detail });

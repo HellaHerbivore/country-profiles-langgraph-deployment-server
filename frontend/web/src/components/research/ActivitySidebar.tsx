@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 export function ActivitySidebarContent() {
   const { state } = useResearchContext();
-  const { phase, progress, status, logs, topic, analysts } = state;
+  const { phase, progress, status, logs, topic } = state;
   const logViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,10 +36,6 @@ export function ActivitySidebarContent() {
           Research Topic
         </div>
         <div className="mt-1 break-words text-sm font-medium text-foreground">{topic}</div>
-        <div className="mt-3 text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
-          Analysts
-        </div>
-        <div className="mt-1 text-sm font-medium text-foreground">{analysts}</div>
       </div>
 
       {/* Progress */}

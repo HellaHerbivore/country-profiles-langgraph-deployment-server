@@ -206,12 +206,14 @@ You have access to ONLY these document filestores (you must not assume any other
 Your job:
 1. Choose ONE store as the PRIMARY anchor — the one whose evidence is most central to this specific topic.
 2. The remaining selected stores are SECONDARY — used to corroborate the primary evidence and to expose gaps.
-3. Explain your reasoning briefly and concretely: why this primary, why these stores corroborate well for THIS topic.
+3. Decide HOW MANY analyst angles to deploy on this topic. Pick an integer between 1 and 4 inclusive — never more than 4. Use 1 for narrow, single-question topics; 2-3 for typical topics; reserve 4 only for genuinely multi-faceted topics that span distinct stakeholder groups or distinct sub-domains.
+4. Explain your reasoning briefly and concretely: why this primary store, why these stores corroborate well for THIS topic, AND why you chose this number of analyst angles.
 
 Respond as JSON with keys:
 - "primary": the store key string of the primary store
 - "secondary": list of the remaining selected store key strings
-- "rationale": 2-4 sentences explaining the choice, written for a human reader
+- "num_analysts": integer between 1 and 4 inclusive — the number of analyst angles to deploy
+- "rationale": 2-4 sentences explaining the choice of primary store AND the number of analyst angles, written for a human reader
 - "brief": a short (3-5 sentence) plain-language note to the user describing how you'll approach the research, readable while the rest of the report generates"""
 
 
@@ -252,6 +254,7 @@ def plan_research(state: ResearchGraphState):
         plan = {
             "primary": selected[0],
             "secondary": selected[1:],
+            "num_analysts": 3,
             "rationale": "Defaulted to the first selected store as primary due to a planning parse error.",
             "brief": "Proceeding with a default research plan across the selected sources.",
         }
@@ -262,10 +265,19 @@ def plan_research(state: ResearchGraphState):
     plan["secondary"] = [s for s in plan.get("secondary", []) if s in selected and s != plan["primary"]]
     plan["selected_stores"] = selected
 
+    # Sanitize: clamp num_analysts to [1, 4]
+    try:
+        num_analysts = int(plan.get("num_analysts", 3))
+    except (TypeError, ValueError):
+        num_analysts = 3
+    num_analysts = max(1, min(4, num_analysts))
+    plan["num_analysts"] = num_analysts
+
     return {
         "research_plan": plan,
         "topic": topic,
         "selected_stores": selected,
+        "max_analysts": num_analysts,
         "messages": [AIMessage(
             content=f"[PROGRESS:10] Mapped out the approach.\n\n**How I'll approach this:** {plan.get('brief', '')}",
             name="System"
@@ -285,9 +297,13 @@ def create_analysts(state: ResearchGraphState):
     if not topic and state.get('messages'):
         topic = state['messages'][-1].content
 
-    max_analysts = state.get('max_analysts')
-    if not max_analysts:
+    research_plan = state.get('research_plan') or {}
+    max_analysts = state.get('max_analysts') or research_plan.get('num_analysts') or 3
+    try:
+        max_analysts = int(max_analysts)
+    except (TypeError, ValueError):
         max_analysts = 3
+    max_analysts = max(1, min(4, max_analysts))
 
     structured_llm = llm.with_structured_output(Perspectives)
     system_message = analyst_instructions.format(
@@ -819,6 +835,7 @@ def finalize_report(state: ResearchGraphState):
     players = state.get("players_section", "")
     topic = state["topic"]
     research_plan = state.get("research_plan", {}) or {}
+    analysts = state.get("analysts") or []
 
     # Collect every citation from all sections (matches the colored-span wrapper)
     all_sources = set()
@@ -840,6 +857,17 @@ def finalize_report(state: ResearchGraphState):
     rationale_raw = research_plan.get("rationale", "No research plan rationale available.")
     plan_rationale = rationale_raw if isinstance(rationale_raw, str) else "No research plan rationale available."
 
+    num_analysts = len(analysts) if analysts else research_plan.get("num_analysts", 0)
+    if analysts:
+        angle_lines = "\n".join(f"- **{a.role}** — {a.description}" for a in analysts)
+        angle_word = "angle" if num_analysts == 1 else "angles"
+        analyst_block = (
+            f"**Analyst angles chosen:** {num_analysts} {angle_word} were deployed to investigate this topic:\n\n"
+            f"{angle_lines}"
+        )
+    else:
+        analyst_block = "**Analyst angles chosen:** No analyst angles were recorded for this run."
+
     final_report_str = f"""# Strategic Briefing: {topic}
 
 ## How This Research Was Approached
@@ -847,6 +875,8 @@ def finalize_report(state: ResearchGraphState):
 **Primary source store:** {primary_label}
 
 {plan_rationale}
+
+{analyst_block}
 
 ---
 
