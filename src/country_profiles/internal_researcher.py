@@ -128,67 +128,11 @@ class ResearchGraphState(TypedDict):
     players_section: str
     messages: Annotated[list, operator.add]
     final_report: str
-    # layers_briefing: str
 
 
 # ---------------------------------------------------------------------------
 # 3. Work Nodes (The Steps)
 # ---------------------------------------------------------------------------
-
-# # --- 3a. Layers Briefing (static macro + dynamic meso/micro/hidden) ---
-
-# layers_briefing_instructions = """You are a strategic analyst for animal advocacy. Given the research topic below, provide a brief (2–4 sentences each) overview of the actors and forces of change at three levels:
-
-# - **Meso**: Sector and institutional forces relevant to this topic — industry associations, professional bodies, regional government, large NGOs, media networks, religious institutions operating at organisational scale.
-# - **Micro**: Ground-level and individual forces — grassroots organisations, community leaders, individual consumers, local activists, household-level dynamics, frontline workers.
-# - **Hidden**: Forces that are present but easily overlooked — informal economies, unregulated supply chains, cultural taboos, data gaps, silent stakeholders, unintended policy side-effects.
-
-# Bold the 1–2 most important phrases per level using markdown **bold**.
-# Respond as JSON with keys: meso, micro, hidden."""
-
-# def generate_layers_briefing(state: ResearchGraphState):
-#     topic = state.get("topic")
-#     if not topic and state.get("messages"):
-#         topic = state["messages"][-1].content
-
-#     result = llm.invoke([
-#         SystemMessage(content=layers_briefing_instructions),
-#         HumanMessage(content=f"Topic: {topic}")
-#     ])
-
-#     content = result.content
-#     if isinstance(content, list):
-#         content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
-#     else:
-#         content = str(content)
-
-#     content = content.strip()
-#     if content.startswith("```"):
-#         content = re.sub(r'^```(?:json)?\s*', '', content)
-#         content = re.sub(r'\s*```$', '', content)
-
-#     # Parse dynamic layers and combine with static macro
-#     try:
-#         dynamic_layers = json.loads(content)
-#     except json.JSONDecodeError:
-#         dynamic_layers = {"meso": content, "micro": "", "hidden": ""}
-
-#     full_briefing = json.dumps({
-#         "macro_statement": INDIA_MACRO_STATEMENT,
-#         "data_points": INDIA_DATA_POINTS,
-#         "meso": dynamic_layers.get("meso", ""),
-#         "micro": dynamic_layers.get("micro", ""),
-#         "hidden": dynamic_layers.get("hidden", ""),
-#     })
-
-#     return {
-#         "layers_briefing": full_briefing,
-#         "topic": topic,
-#         "messages": [AIMessage(
-#             content=f"[LAYERS_BRIEFING]{full_briefing}",
-#             name="System"
-#         )]
-#     }
 
 # --- 3a. Research Planning ---
 
@@ -334,7 +278,6 @@ def generate_answer(state: InterviewState):
         primary = selected[0]
     secondary = [s for s in selected if s != primary]
 
-    primary_id = STORE_REGISTRY[primary][0]
     active_store_ids = [STORE_REGISTRY[k][0] for k in selected]
 
     print(f"[generate_answer] research_plan.selected={selected}, active_store_ids={active_store_ids}")
@@ -360,6 +303,8 @@ def generate_answer(state: InterviewState):
     3. Do not use your own training data to fill in gaps.
     4. CORROBORATION PROTOCOL: For every major claim drawn from the primary store, you MUST actively cross-reference it against the secondary stores and state whether they corroborate, contradict, or are silent on the issue. Where the secondary stores are silent on something the primary store treats as important, name that explicitly as a GAP.
     {"5. PIB SOURCES: Government of India press releases are stored in files named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`). For any claim drawn from one of these files, you MUST extract the date of release and the exact title of the specific press release — these are required for its citation, because the filename cannot serve as the citation. For all non-PIB sources, the citation is just the filename." if pib_selected else "5. (No PIB store selected for this task.)"}
+    6. ONE-CLAIM-ONE-SOURCE BY DEFAULT. A citation must support the specific claim it sits next to. If you make a claim drawn from source A, cite source A; don't cite source B because it's topically nearby. Place citations mid-sentence at the point each source's contribution applies, rather than parking them all at the end of a sentence.
+    7. WHEN YOU DO COMBINE SOURCES, SAY SO. If you produce a claim that genuinely combines information from multiple sources to suggest a mechanism, recommendation, or causal link that no single source states, this is your own synthesis — flag it as such with explicit framing ("taken together, these sources suggest…", "this implies…") and cite ALL contributing sources at the point of synthesis. Do not present a synthesis under a single citation as if that one source made the claim.
 
     {GLOBAL_CITATION_RULES}
     """
@@ -580,6 +525,9 @@ CRITICAL RULES:
 3. Preserve highly insightful information verbatim — do not water down sharp observations.
 4. The memos contain explicit corroboration findings (where sources agree or contradict each other). Extract and foreground these — when multiple sources corroborate a claim, say so; when they conflict, present the conflict rather than picking a side.
 5. You are receiving the full set of interview memos. Pull only what speaks to what the evidence SAYS — leave gaps, opportunities, and player mapping to the other sections.
+6. SYNTHESIS VS. EVIDENCE. If a claim combines information from multiple sources to produce a recommendation, mechanism, or causal link that no single source states, it is synthesis — not direct evidence. Default to rewriting such claims as separate claims each tied to what its source actually says. Only when the synthesis itself is genuinely the useful insight, keep it but frame it transparently as analysis ("the evidence taken together suggests…", "these findings point toward…") and cite ALL the sources it draws on.
+7. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
+8. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 6) and all contributing sources are cited together at the end.
 
 {citation_rules}
 
@@ -623,6 +571,9 @@ INSTRUCTIONS:
 6. Preserve any numeric data that contextualizes a gap.
 7. The memos contain explicit GAP findings flagged during research (where the primary source raised something the secondary sources were silent on). Extract these flagged gaps directly — they are the backbone of this section — and supplement them with any further gaps you identify.
 8. You are receiving the full set of interview memos. Pull only what speaks to what is MISSING or unanswered — leave confirmed evidence, opportunities, and player mapping to the other sections.
+9. SYNTHESIS VS. EVIDENCE. If a claim combines information from multiple sources to produce a recommendation, mechanism, or causal link that no single source states, it is synthesis — not direct evidence. Default to rewriting such claims as separate claims each tied to what its source actually says. Only when the synthesis itself is genuinely the useful insight, keep it but frame it transparently as analysis ("the evidence taken together suggests…", "these findings point toward…") and cite ALL the sources it draws on.
+10. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
+11. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 9) and all contributing sources are cited together at the end.
 
 {citation_rules}
 
@@ -668,6 +619,9 @@ INSTRUCTIONS:
 6. Ground every opportunity in specific evidence from the memos. Do not speculate beyond what the data supports. If the evidence does not indicate time-sensitive opportunities, say so transparently rather than fabricating urgency.
 7. NEVER summarise away numeric or statistical data. Preserve all figures exactly.
 8. DO NOT mention any AI analyst names, interviewers, or experts.
+9. SYNTHESIS VS. EVIDENCE. Opportunities ARE often syntheses — combining evidence into a lever is this section's job — but the synthesis must still be honest. When you produce an opportunity that combines information from multiple sources to suggest a mechanism, recommendation, or causal link that no single source states, frame it transparently as analysis ("the evidence taken together suggests…", "these findings point toward…") and cite ALL the sources it draws on. Do not present a synthesis under a single citation as if that one source made the claim.
+10. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
+11. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 9) and all contributing sources are cited together at the end.
 
 {citation_rules}
 
@@ -710,6 +664,9 @@ INSTRUCTIONS:
 4. DO NOT mention any AI analyst names, interviewers, or experts.
 5. Preserve any numeric data (e.g., membership numbers, funding figures) exactly as stated.
 6. If very little information about players exists in the vaults, a short honest section is better than a padded speculative one.
+7. SYNTHESIS VS. EVIDENCE. If a claim about a player combines information from multiple sources to attribute a position, strategy, or relationship that no single source states, it is synthesis — not direct evidence. Default to rewriting such claims as separate claims each tied to what its source actually says. Only when the synthesis itself is genuinely the useful insight, frame it transparently as analysis ("the evidence taken together suggests…") and cite ALL the sources it draws on.
+8. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
+9. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 7) and all contributing sources are cited together at the end.
 
 {citation_rules}
 
@@ -764,8 +721,13 @@ def finalize_report(state: ResearchGraphState):
     sources_list = "\n".join(f"- {s}" for s in sorted(all_sources)) if all_sources else "- No sources cited"
 
     primary_key = research_plan.get("primary", "")
-    primary_label = STORE_REGISTRY[primary_key][1] if primary_key in STORE_REGISTRY else "Not specified"
-    plan_rationale = research_plan.get("rationale", "No research plan rationale available.")
+    if isinstance(primary_key, str) and primary_key in STORE_REGISTRY:
+        primary_label = STORE_REGISTRY[primary_key][1]
+    else:
+        primary_label = "Not specified"
+
+    rationale_raw = research_plan.get("rationale", "No research plan rationale available.")
+    plan_rationale = rationale_raw if isinstance(rationale_raw, str) else "No research plan rationale available."
 
     final_report_str = f"""# Strategic Briefing: {topic}
 
@@ -818,7 +780,6 @@ def finalize_report(state: ResearchGraphState):
 # 6. Build the Graph
 # ---------------------------------------------------------------------------
 builder = StateGraph(ResearchGraphState)
-# builder.add_node("generate_layers_briefing", generate_layers_briefing)
 builder.add_node("plan_research", plan_research)
 builder.add_node("create_analysts", create_analysts)
 builder.add_node("conduct_interview", interview_builder.compile())
@@ -830,10 +791,6 @@ builder.add_node("write_gaps", write_gaps)
 builder.add_node("write_opportunities", write_opportunities)
 builder.add_node("write_players", write_players)
 builder.add_node("finalize_report", finalize_report)
-
-# builder.add_edge(START, "generate_layers_briefing")
-# builder.add_edge("generate_layers_briefing", "create_analysts")
-# builder.add_conditional_edges("create_analysts", initiate_all_interviews, ["conduct_interview"])
 
 builder.add_edge(START, "plan_research")
 builder.add_edge("plan_research", "create_analysts")
