@@ -193,65 +193,6 @@ def _extract_consulted_sources(response) -> list[str]:
     return sources
 
 
-# ---------------------------------------------------------------------------
-# 2b. Streaming helpers (user-facing source formatting)
-# ---------------------------------------------------------------------------
-
-# # --- 3a. Layers Briefing (static macro + dynamic meso/micro/hidden) ---
-
-# layers_briefing_instructions = """You are a strategic analyst for animal advocacy. Given the research topic below, provide a brief (2–4 sentences each) overview of the actors and forces of change at three levels:
-
-# - **Meso**: Sector and institutional forces relevant to this topic — industry associations, professional bodies, regional government, large NGOs, media networks, religious institutions operating at organisational scale.
-# - **Micro**: Ground-level and individual forces — grassroots organisations, community leaders, individual consumers, local activists, household-level dynamics, frontline workers.
-# - **Hidden**: Forces that are present but easily overlooked — informal economies, unregulated supply chains, cultural taboos, data gaps, silent stakeholders, unintended policy side-effects.
-
-# Bold the 1–2 most important phrases per level using markdown **bold**.
-# Respond as JSON with keys: meso, micro, hidden."""
-
-# def generate_layers_briefing(state: ResearchGraphState):
-#     topic = state.get("topic")
-#     if not topic and state.get("messages"):
-#         topic = state["messages"][-1].content
-
-#     result = llm.invoke([
-#         SystemMessage(content=layers_briefing_instructions),
-#         HumanMessage(content=f"Topic: {topic}")
-#     ])
-
-#     content = result.content
-#     if isinstance(content, list):
-#         content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
-#     else:
-#         content = str(content)
-
-#     content = content.strip()
-#     if content.startswith("```"):
-#         content = re.sub(r'^```(?:json)?\s*', '', content)
-#         content = re.sub(r'\s*```$', '', content)
-
-#     # Parse dynamic layers and combine with static macro
-#     try:
-#         dynamic_layers = json.loads(content)
-#     except json.JSONDecodeError:
-#         dynamic_layers = {"meso": content, "micro": "", "hidden": ""}
-
-#     full_briefing = json.dumps({
-#         "macro_statement": INDIA_MACRO_STATEMENT,
-#         "data_points": INDIA_DATA_POINTS,
-#         "meso": dynamic_layers.get("meso", ""),
-#         "micro": dynamic_layers.get("micro", ""),
-#         "hidden": dynamic_layers.get("hidden", ""),
-#     })
-
-#     return {
-#         "layers_briefing": full_briefing,
-#         "topic": topic,
-#         "messages": [AIMessage(
-#             content=f"[LAYERS_BRIEFING]{full_briefing}",
-#             name="System"
-#         )]
-#     }
-
 # --- 3a. Research Planning ---
 
 research_plan_instructions = """You are the lead researcher planning how to investigate a topic for an animal advocacy strategic briefing.
