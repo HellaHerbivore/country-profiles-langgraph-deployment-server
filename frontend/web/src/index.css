@@ -156,7 +156,19 @@
   }
 
   /* ==========================================================================
-     Side panels — ACE navy (#041d30) with teal (#05a5a1) foreground.
+     Top navigation bar — ACE navy (#041d30) with light (#e6e8ea) foreground.
+     ========================================================================== */
+  .navbar-dark {
+    background-color: #041d30; /* navy */
+    --foreground: 210 9% 91%; /* #e6e8ea */
+    --muted-foreground: 210 8% 72%;
+    --border: 206 50% 22%;
+    --accent: 178 94% 33%; /* teal hover */
+    --accent-foreground: 206 85% 10%;
+  }
+
+  /* ==========================================================================
+     Side panels — ACE navy (#041d30) with light (#e6e8ea) foreground.
      These classes re-scope the Shadcn CSS variables so every descendant class
      (text-foreground, bg-card, border-border, text-primary, ...) resolves to
      a teal-on-navy palette without touching child markup.

@@ -11,8 +11,8 @@ type NavBarProps = {
 
 export function NavBar({ onToggleSources, onToggleActivity }: NavBarProps) {
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-card px-3 sm:px-6">
-      <div className="flex items-center gap-2 sm:gap-4">
+    <header className="navbar-dark flex h-14 items-center justify-between border-b border-border px-3 sm:px-6">
+      <div className="flex items-center gap-3 sm:gap-4">
         <Button
           variant="ghost"
           size="icon"
@@ -22,6 +22,11 @@ export function NavBar({ onToggleSources, onToggleActivity }: NavBarProps) {
         >
           <Menu className="h-5 w-5" />
         </Button>
+        <img
+          src="/assets/ace-logo.png"
+          alt="Animal Charity Evaluators"
+          className="h-9 w-auto shrink-0"
+        />
         <div className="flex items-center gap-3">
           <span className="font-serif text-lg font-medium tracking-tight text-foreground sm:text-xl">
             Country Profiles
