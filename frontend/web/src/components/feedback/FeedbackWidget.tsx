@@ -47,7 +47,7 @@ export function FeedbackWidget() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Share feedback"
-        className="bg-[#693F3A] text-[#F0E6E5] hover:bg-[#9E5E57]"
+        className="bg-[#0a6dab] text-[#e6e8ea] hover:bg-[#0a5d92]"
       >
         <MessageSquare className="h-4 w-4" />
         <span className="hidden sm:inline">Feedback</span>
