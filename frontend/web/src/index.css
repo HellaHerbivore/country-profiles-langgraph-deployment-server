@@ -164,10 +164,10 @@
   .panel-sources,
   .panel-activity {
     background-color: #041d30; /* navy */
-    --foreground: 178 94% 33%; /* #05a5a1 teal */
-    --muted-foreground: 178 45% 55%;
+    --foreground: 210 9% 91%; /* #e6e8ea light gray */
+    --muted-foreground: 210 8% 75%;
     --card: 206 60% 16%; /* slightly lighter navy */
-    --card-foreground: 178 94% 33%;
+    --card-foreground: 210 9% 91%;
     --border: 178 35% 28%;
     --input: 178 35% 28%;
     --primary: 178 94% 33%;
