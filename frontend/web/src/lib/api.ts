@@ -170,10 +170,17 @@ export type StreamCallbacks = {
   onContent?: (fullContent: string) => void;
 };
 
+export type DocumentInput = {
+  b64: string;
+  mime: string;
+  filename: string;
+};
+
 export async function streamResearch(
   threadId: string,
   topic: string,
   selectedStores: string[],
+  document: DocumentInput | null,
   callbacks: StreamCallbacks = {},
 ): Promise<string> {
   const resp = await fetch(`${CONFIG.SERVER_URL}/threads/${threadId}/runs/stream`, {
@@ -184,6 +191,13 @@ export async function streamResearch(
       input: {
         topic,
         selected_stores: selectedStores,
+        ...(document
+          ? {
+              document_b64: document.b64,
+              document_mime: document.mime,
+              document_filename: document.filename,
+            }
+          : {}),
       },
       config: {
         recursion_limit: 100,

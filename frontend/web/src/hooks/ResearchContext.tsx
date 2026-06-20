@@ -4,7 +4,7 @@ import type { ResearchState } from "@/types/research";
 
 type ResearchContextValue = {
   state: ResearchState;
-  start: (topic: string, selectedStores: string[]) => Promise<void>;
+  start: (topic: string, selectedStores: string[], file?: File | null) => Promise<void>;
   reset: () => void;
 };
 

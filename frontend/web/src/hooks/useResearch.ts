@@ -2,6 +2,7 @@ import { useCallback, useReducer, useRef } from "react";
 
 import {
   createThread,
+  type DocumentInput,
   extractReport,
   freshToken,
   SessionExpiredError,
@@ -101,6 +102,34 @@ function reducer(state: ResearchState, action: Action): ResearchState {
   }
 }
 
+// Largest file we'll accept before base64-encoding (~5 MB). base64 inflates the
+// payload by ~33%, and the document rides inside the JSON run request.
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_DOCUMENT_EXTENSIONS = [".pdf", ".md", ".markdown", ".txt"];
+
+function mimeForFile(file: File): string {
+  if (file.type) return file.type;
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".md") || name.endsWith(".markdown")) return "text/markdown";
+  if (name.endsWith(".txt")) return "text/plain";
+  if (name.endsWith(".pdf")) return "application/pdf";
+  return "application/octet-stream";
+}
+
+async function fileToDocumentInput(file: File): Promise<DocumentInput> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return {
+    b64: btoa(binary),
+    mime: mimeForFile(file),
+    filename: file.name,
+  };
+}
+
 export function useResearch() {
   const [state, dispatch] = useReducer(reducer, initialResearchState);
   const runningRef = useRef(false);
@@ -110,11 +139,11 @@ export function useResearch() {
     dispatch({ type: "RESET" });
   }, []);
 
-  const start = useCallback(async (topic: string, selectedStores: string[]) => {
+  const start = useCallback(async (topic: string, selectedStores: string[], file?: File | null) => {
     if (runningRef.current) return;
     const trimmed = topic.trim();
-    if (!trimmed) {
-      dispatch({ type: "ERROR", message: "Please enter a research topic." });
+    if (!trimmed && !file) {
+      dispatch({ type: "ERROR", message: "Please enter a research topic or attach a document." });
       return;
     }
     if (!selectedStores || selectedStores.length === 0) {
@@ -122,8 +151,27 @@ export function useResearch() {
       return;
     }
 
+    let document: DocumentInput | null = null;
+    if (file) {
+      const name = file.name.toLowerCase();
+      if (!ALLOWED_DOCUMENT_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+        dispatch({ type: "ERROR", message: "Unsupported file type. Attach a PDF, Markdown, or text file." });
+        return;
+      }
+      if (file.size > MAX_DOCUMENT_BYTES) {
+        dispatch({ type: "ERROR", message: "File is too large (max 5 MB)." });
+        return;
+      }
+      try {
+        document = await fileToDocumentInput(file);
+      } catch {
+        dispatch({ type: "ERROR", message: "Could not read the attached file." });
+        return;
+      }
+    }
+
     runningRef.current = true;
-    dispatch({ type: "START", topic: trimmed });
+    dispatch({ type: "START", topic: trimmed || file?.name || "Attached document" });
 
     try {
       const serverReady = await wakeUpServer((statusText) => {
@@ -149,7 +197,7 @@ export function useResearch() {
       dispatch({ type: "STATUS", status: "Running research pipeline..." });
       const fullContent = await withRetry(
         () =>
-          streamResearch(threadId, trimmed, selectedStores, {
+          streamResearch(threadId, trimmed, selectedStores, document, {
             onProgress: (percent, detail) => {
               dispatch({ type: "PROGRESS", percent, statusText: detail });
               if (detail) dispatch({ type: "LOG", text: detail });

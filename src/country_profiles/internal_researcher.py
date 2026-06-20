@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import base64
 import operator
 from dotenv import load_dotenv
 from typing import Annotated, List, cast
@@ -119,6 +120,10 @@ class ResearchGraphState(TypedDict):
     max_analysts: int
     human_analyst_feedback: str
     selected_stores: List[str]
+    document_b64: str
+    document_mime: str
+    document_filename: str
+    document_text: str
     research_plan: dict[str, object]
     analysts: List[Analyst]
     sections: Annotated[list, operator.add]
@@ -202,6 +207,122 @@ def _strip_system_messages(messages: list) -> list:
     ]
 
 
+# ---------------------------------------------------------------------------
+# 2c. Document ingestion (uploaded PDF / Markdown input)
+# ---------------------------------------------------------------------------
+# Plain-text-like documents we can decode directly. Anything else is treated as
+# a PDF and handed to Gemini for native transcription.
+_TEXT_MIME_TYPES = {"text/markdown", "text/plain", "text/x-markdown"}
+_PDF_MIME_TYPES = {"application/pdf"}
+
+_PDF_TRANSCRIBE_PROMPT = (
+    "Transcribe this document into clean, faithful Markdown. Preserve headings, "
+    "lists, tables, and the logical reading order. Do not summarise, interpret, "
+    "or add commentary — reproduce the document's text content only. If the "
+    "document contains diagrams or figures, describe them briefly in square "
+    "brackets where they appear."
+)
+
+
+def _guess_mime(mime: str, filename: str) -> str:
+    """Resolve a usable MIME type from the provided value, falling back to the
+    file extension. Returns '' when the type can't be determined."""
+    if mime:
+        return mime.lower()
+    name = (filename or "").lower()
+    if name.endswith((".md", ".markdown")):
+        return "text/markdown"
+    if name.endswith(".txt"):
+        return "text/plain"
+    if name.endswith(".pdf"):
+        return "application/pdf"
+    return ""
+
+
+def ingest_document(state: ResearchGraphState):
+    """Entry node: turn an uploaded PDF/Markdown file into plain `document_text`.
+
+    Markdown/plain text is base64-decoded directly; PDFs are transcribed to
+    Markdown by Gemini (native PDF ingestion, no local parser dependency). A
+    no-op when no document was supplied, so plain text-topic runs are unchanged.
+    """
+    document_b64 = state.get("document_b64")
+    if not document_b64:
+        return {}
+
+    filename = state.get("document_filename") or "uploaded document"
+    mime = _guess_mime(state.get("document_mime") or "", state.get("document_filename") or "")
+
+    try:
+        raw_bytes = base64.b64decode(document_b64)
+    except (ValueError, TypeError) as e:
+        print(f"[ingest_document] could not decode base64 for {filename}: {e}")
+        return {
+            "messages": [AIMessage(
+                content=f"[PROGRESS:5] Couldn't read the attached file ({filename}); continuing without it.",
+                name="System",
+            )]
+        }
+
+    document_text = ""
+
+    if mime in _TEXT_MIME_TYPES:
+        try:
+            document_text = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            document_text = raw_bytes.decode("utf-8", errors="replace")
+
+    elif mime in _PDF_MIME_TYPES:
+        max_tries = 3
+        for try_count in range(max_tries):
+            try:
+                response = gemini_client.models.generate_content(
+                    model="gemini-3-flash-preview",
+                    contents=[
+                        types.Part.from_bytes(data=raw_bytes, mime_type="application/pdf"),
+                        _PDF_TRANSCRIBE_PROMPT,
+                    ],
+                    config=types.GenerateContentConfig(temperature=0.0),
+                )
+                document_text = (response.text or "").strip()
+                break
+            except errors.ServerError as e:
+                print(f"[ingest_document] Gemini glitch on try {try_count + 1}: {e}")
+                if try_count < max_tries - 1:
+                    time.sleep(3)
+                else:
+                    print("[ingest_document] PDF transcription failed; continuing without it.")
+            except Exception as e:  # defensive: never crash the run on ingestion
+                print(f"[ingest_document] unexpected PDF transcription error: {e}")
+                break
+
+    else:
+        print(f"[ingest_document] unsupported MIME '{mime}' for {filename}; skipping.")
+        return {
+            "messages": [AIMessage(
+                content=f"[PROGRESS:5] The attached file type isn't supported ({filename}); continuing without it.",
+                name="System",
+            )]
+        }
+
+    if not document_text:
+        return {
+            "messages": [AIMessage(
+                content=f"[PROGRESS:5] Couldn't extract any text from {filename}; continuing without it.",
+                name="System",
+            )]
+        }
+
+    print(f"[ingest_document] extracted {len(document_text)} chars from {filename} ({mime}).")
+    return {
+        "document_text": document_text,
+        "messages": [AIMessage(
+            content=f"[PROGRESS:5] Read the attached document ({filename}).",
+            name="System",
+        )]
+    }
+
+
 # --- 3a. Research Planning ---
 
 research_plan_instructions = """You are the lead researcher planning how to investigate a topic for an animal advocacy strategic briefing.
@@ -228,8 +349,26 @@ Respond as JSON with keys:
 
 def plan_research(state: ResearchGraphState):
     topic = state.get("topic")
-    if not topic and state.get("messages"):
-        topic = state["messages"][-1].content
+    if not topic:
+        # Fall back to the latest user-supplied message (CLI/message-input path),
+        # skipping the System progress emits that ingest_document may have added.
+        non_system = _strip_system_messages(state.get("messages") or [])
+        if non_system:
+            topic = non_system[-1].content
+
+    # Supplement behavior: an attached document and/or a typed instruction both
+    # feed the pipeline. The combined value becomes the effective topic so every
+    # downstream node (analysts, interviews, writers) sees the document content.
+    document_text = state.get("document_text")
+    if document_text:
+        doc_block = (
+            "ATTACHED DOCUMENT (the primary subject of this request):\n\n"
+            f"{document_text}"
+        )
+        if topic and str(topic).strip():
+            topic = f"USER INSTRUCTION:\n{topic}\n\n{doc_block}"
+        else:
+            topic = doc_block
 
     selected = state.get("selected_stores") or DEFAULT_SELECTED_STORES
     selected = [s for s in selected if s in STORE_REGISTRY]
@@ -970,6 +1109,7 @@ def finalize_report(state: ResearchGraphState):
 # 6. Build the Graph
 # ---------------------------------------------------------------------------
 builder = StateGraph(ResearchGraphState)
+builder.add_node("ingest_document", ingest_document)
 builder.add_node("plan_research", plan_research)
 builder.add_node("create_analysts", create_analysts)
 builder.add_node("conduct_interview", interview_builder.compile())
@@ -982,7 +1122,8 @@ builder.add_node("write_opportunities", write_opportunities)
 builder.add_node("write_players", write_players)
 builder.add_node("finalize_report", finalize_report)
 
-builder.add_edge(START, "plan_research")
+builder.add_edge(START, "ingest_document")
+builder.add_edge("ingest_document", "plan_research")
 builder.add_edge("plan_research", "create_analysts")
 builder.add_conditional_edges("create_analysts", initiate_all_interviews, ["conduct_interview"])
 
