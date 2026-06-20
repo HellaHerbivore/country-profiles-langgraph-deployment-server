@@ -4,7 +4,7 @@
 
 /* ==========================================================================
    Animal Charity Evaluators (ACE) — brand palette
-   #041d30 navy   · #05a5a1 teal   · #e6e8ea light gray
+   #041c30 navy   · #05a5a1 teal   · #e6e8ea light gray
    #a5af1c lime   · #0a6dab blue   · #843468 plum   (highlight accents)
    ========================================================================== */
 
@@ -12,17 +12,17 @@
   :root {
     /* light-gray surface with deep-navy text */
     --background: 210 9% 91%; /* #e6e8ea */
-    --foreground: 206 85% 10%; /* #041d30 */
+    --foreground: 207 85% 10%; /* #041c30 */
 
     --card: 0 0% 100%;
-    --card-foreground: 206 85% 10%;
+    --card-foreground: 207 85% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 206 85% 10%;
+    --popover-foreground: 207 85% 10%;
 
     /* primary = lime — drives the submit button */
     --primary: 64 72% 40%; /* #a5af1c */
-    --primary-foreground: 206 85% 10%;
+    --primary-foreground: 207 85% 10%;
 
     /* secondary = teal */
     --secondary: 178 94% 33%; /* #05a5a1 */
@@ -156,26 +156,26 @@
   }
 
   /* ==========================================================================
-     Top navigation bar — ACE navy (#041d30) with light (#e6e8ea) foreground.
+     Top navigation bar — ACE navy (#041c30) with light (#e6e8ea) foreground.
      ========================================================================== */
   .navbar-dark {
-    background-color: #041d30; /* navy */
+    background-color: #041c30; /* navy */
     --foreground: 210 9% 91%; /* #e6e8ea */
     --muted-foreground: 210 8% 72%;
     --border: 206 50% 22%;
     --accent: 178 94% 33%; /* teal hover */
-    --accent-foreground: 206 85% 10%;
+    --accent-foreground: 207 85% 10%;
   }
 
   /* ==========================================================================
-     Side panels — ACE navy (#041d30) with light (#e6e8ea) foreground.
+     Side panels — ACE navy (#041c30) with light (#e6e8ea) foreground.
      These classes re-scope the Shadcn CSS variables so every descendant class
      (text-foreground, bg-card, border-border, text-primary, ...) resolves to
      a teal-on-navy palette without touching child markup.
      ========================================================================== */
   .panel-sources,
   .panel-activity {
-    background-color: #041d30; /* navy */
+    background-color: #041c30; /* navy */
     --foreground: 210 9% 91%; /* #e6e8ea light gray */
     --muted-foreground: 210 8% 75%;
     --card: 206 60% 16%; /* slightly lighter navy */
@@ -183,14 +183,14 @@
     --border: 178 35% 28%;
     --input: 178 35% 28%;
     --primary: 178 94% 33%;
-    --primary-foreground: 206 85% 10%;
+    --primary-foreground: 207 85% 10%;
     --secondary: 178 94% 33%;
-    --secondary-foreground: 206 85% 10%;
+    --secondary-foreground: 207 85% 10%;
     --accent: 178 94% 33%;
-    --accent-foreground: 206 85% 10%;
+    --accent-foreground: 207 85% 10%;
     --muted: 206 55% 18%;
     --destructive: 8 75% 70%;
-    --destructive-foreground: 206 85% 10%;
+    --destructive-foreground: 207 85% 10%;
     --ring: 178 94% 33%;
   }
 }
