@@ -79,8 +79,8 @@ For funders:
 GLOBAL_CITATION_RULES = """CITATION RULES:
 1. Cite using the EXACT source name as it appears in the filestore, with any file extension removed (drop .md, .pdf, etc.). Example: a file named `local_welfare_review_2021.pdf` is cited as `local_welfare_review_2021`.
 2. EXCEPTION — PIB sources: any source file named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`) is a yearly collection of press releases from the Government of India Press Information Bureau (PIB). These files must NEVER be cited by filename. Because one file holds many releases, each must instead be cited as: [Date of release, Ministry of Fisheries, Animal Husbandry & Dairying, Exact Title of Press Release, PIB] — with the date and title extracted from the specific release within the file.
-3. Every specific detail, claim, statistic, or pivotal finding MUST carry a citation, wrapped exactly like this: <span style="color: #9f635c;">[citation]</span>
-4. If citing multiple sources for one claim, separate them with a semicolon inside a single span: <span style="color: #9f635c;">[source_one; source_two]</span>
+3. Every specific detail, claim, statistic, or pivotal finding MUST carry a citation, wrapped exactly like this: <span style="color: #843468;">[citation]</span>
+4. If citing multiple sources for one claim, separate them with a semicolon inside a single span: <span style="color: #843468;">[source_one; source_two]</span>
 5. When in doubt, cite the source."""
 
 
