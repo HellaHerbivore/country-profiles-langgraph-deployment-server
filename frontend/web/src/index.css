@@ -127,7 +127,7 @@
   }
 
   .report-prose .source-cite {
-    color: hsl(203 89% 35%); /* #0a6dab blue */
+    color: hsl(321 43% 36%); /* #843468 plum */
     @apply text-[0.9em];
   }
 
