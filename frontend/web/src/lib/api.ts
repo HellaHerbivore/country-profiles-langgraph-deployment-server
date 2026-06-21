@@ -289,7 +289,7 @@ export async function streamResearch(
 
 // ── Extract Report ──
 export function extractReport(fullContent: string): string {
-  const briefingMarker = "# Strategic Briefing:";
+  const briefingMarker = "# Theory of Change Evaluation";
 
   let report = "";
 

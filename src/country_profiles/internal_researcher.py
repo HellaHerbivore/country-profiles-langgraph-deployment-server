@@ -8,10 +8,10 @@ from typing import Annotated, List, cast
 from typing_extensions import TypedDict
 from pydantic import BaseModel, Field
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, get_buffer_string
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.types import Send, Command
-from langgraph.graph import END, MessagesState, START, StateGraph
+from langgraph.types import Send
+from langgraph.graph import END, START, StateGraph
 
 import time
 from google import genai
@@ -38,7 +38,7 @@ ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy9
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
 
-# Maps a human-readable store key -> (file_search_store_id, description for the planner)
+# Maps a human-readable store key -> (file_search_store_id, description for retrieval scoping)
 STORE_REGISTRY = {
     "foreign_academic": (FOREIGN_ACADEMIC_STORE, "Foreign / international academic research sources."),
     "onground_advocate": (ON_GROUND_ADVOCATE_STORE, "On-the-ground advocate and field organisation sources."),
@@ -49,18 +49,31 @@ STORE_REGISTRY = {
 # Default selection until user-driven selection is wired in.
 DEFAULT_SELECTED_STORES = list(STORE_REGISTRY.keys())
 
+# Plain-language descriptions used in user-facing text. These are by DATA TYPE,
+# never the internal store keys. The on-the-ground advocate source is surfaced as
+# the Stray Dog Regional Advisory Panel Commentary.
+DATA_SOURCE_DESCRIPTIONS = {
+    "foreign_academic": "international academic research",
+    "local_academic": "India-based academic research",
+    "goi_pib": "Government of India press information (Ministry of Fisheries, Animal Husbandry & Dairying)",
+    "onground_advocate": "commentary from the Stray Dog Regional Advisory Panel",
+}
+
 # ---------------------------------------------------------------------------
-# 1b. Static Country Context
+# 1b. Static Country Context (India only — no multi-country routing)
 # ---------------------------------------------------------------------------
 INDIA_MACRO_STATEMENT = """India's regulatory framework is anchored in the landmark Prevention of Cruelty to Animals Act (1960) and the constitutional duty to show compassion to living creatures. While the legislative foundation is robust, it remains hampered by archaic penalty structures that fail to provide a credible deterrent against systemic abuse. Recent judicial activism, particularly from the Supreme Court, has increasingly recognized animal sentience and personhood, though these rulings often clash with regional cultural practices. The Animal Welfare Board of India (AWBI) serves as the primary statutory advisory body, but its efficacy is frequently constrained by fluctuating political priorities and bureaucratic inertia. Consequently, the macro environment is characterized by a high degree of legal idealism versus enforcement deficit."""
 
 INDIA_DATA_POINTS = ["1.4B population", "~4.5B Land Animals/Year", "62 FAOI", "32 WAPI"]
 
 # ---------------------------------------------------------------------------
-# 1c. Global Rules
+# 1c. Field-experience lens (internal only — NEVER named in the output)
 # ---------------------------------------------------------------------------
-GOODGROWTH_LESSONS = """GOOD GROWTH FRAMING — LESSONS FROM FIELD EXPERIENCE:
-These lessons are derived from a study of food systems advocacy campaigns in India. Use them as the analytical lens for identifying actionable opportunities — every opportunity you surface should connect to at least one of these.
+# These lessons shape what counts as an actionable opportunity / a real challenge.
+# They are passed to the relevant writers as a hidden lens and must not be named,
+# quoted as a framework, or referenced by label in the rendered report.
+FIELD_LESSONS = """FIELD-EXPERIENCE LESSONS (internal lens — do not name or reference these in the output):
+Derived from a study of food-systems advocacy campaigns in India.
 
 For advocates / charities:
 1. Contextual homework before launch: campaigns stalled when political timing, enforcement gaps, religious sensitivities, or public sentiment surfaced mid-campaign. A structured pre-launch scan of political climate, regulatory reliability, and the cultural calendar surfaces risk early.
@@ -71,9 +84,9 @@ For advocates / charities:
 6. Use peer spaces for practical knowledge-sharing: low-burden exchanges (short calls, shared templates, peer circles) help smaller and volunteer-led groups swap knowledge on enforcement, coalitions, and capacity.
 
 For funders:
-1. Budget for structured contextual reflection, not just activity: fund time for environmental scans and integrating findings into plans before launch.
-2. Invest in peer learning with smaller organisations in mind: fund shared spaces, mentoring, and convenings so regional and smaller groups can participate, not only large ones.
-3. Be patient and flexible in sensitive contexts: where caste, religion, dairy livelihoods, and hunger are salient, iterative testing and relationship-building take time — support pilots, don't penalise course corrections."""
+1. Budget for structured contextual reflection, not just activity.
+2. Invest in peer learning with smaller organisations in mind.
+3. Be patient and flexible in sensitive contexts where caste, religion, dairy livelihoods, and hunger are salient."""
 
 
 GLOBAL_CITATION_RULES = """CITATION RULES:
@@ -87,59 +100,59 @@ GLOBAL_CITATION_RULES = """CITATION RULES:
 # ----------------------------------------------------------------------------
 # 2. Shapes of our Data (Schemas)
 # ----------------------------------------------------------------------------
-class Analyst(BaseModel):
-    affiliation: str = Field(description="Primary affiliation of the analyst.")
-    name: str = Field(description="Name of the analyst.")
-    role: str = Field(description="Role of the analyst in the context of the topic.")
-    description: str = Field(description="Description of the analyst focus, concerns, and motives.")
+class PathSpec(BaseModel):
+    """The normalised, internal representation of a single theory-of-change path.
 
-    @property
-    def persona(self) -> str:
-        return f"Name: {self.name}\nRole: {self.role}\nAffiliation: {self.affiliation}\nDescription: {self.description}\n"
+    Whatever form the path arrives in (table, prose, uploaded file, pasted text),
+    it is read once into this shape and every downstream step reads from here.
+    """
+    summary: str = Field(description="A short, neutral restatement of what the charity is proposing (2-4 sentences).")
+    activities: List[str] = Field(default_factory=list, description="The concrete actions the charity plans to take.")
+    outputs: List[str] = Field(default_factory=list, description="The direct products of those activities.")
+    outcome_chain: List[str] = Field(default_factory=list, description="The ordered chain of expected changes, earliest first.")
+    final_impact: str = Field(default="", description="The ultimate impact the charity is aiming at.")
+    charity_flagged_opportunities: List[str] = Field(default_factory=list, description="Opportunities the charity itself names or clearly implies.")
+    charity_assumptions: List[str] = Field(default_factory=list, description="Assumptions the charity makes (stated or clearly implied).")
+    method_descriptor: str = Field(default="", description="A short label for the KIND of intervention, e.g. 'corporate cage-free commitments', 'welfare-legislation advocacy', 'public-awareness campaign'.")
+    team_info: str = Field(default="", description="Any information about the charity's team, skills, capacity, or track record present in the input. Empty string if none.")
 
-class Perspectives(BaseModel):
-    analysts: List[Analyst] = Field(description="Comprehensive list of analysts with their roles and affiliations.")
-
-class GenerateAnalystsState(TypedDict):
-    topic: str
-    max_analysts: int
-    human_analyst_feedback: str
-    analysts: List[Analyst]
-
-class InterviewState(MessagesState):
-    max_num_turns: int
-    context: Annotated[list, operator.add]
-    analyst: Analyst
-    interview_research_plan: dict
-    interview: str
-    sections: list
-    interview_signals: Annotated[list, operator.add]
 
 class ResearchGraphState(TypedDict):
+    # --- Inputs from the client (frontend posts topic / selected_stores / document_*) ---
     topic: str
-    max_analysts: int
-    human_analyst_feedback: str
     selected_stores: List[str]
     document_b64: str
     document_mime: str
     document_filename: str
+    # --- Ingest / normalise ---
     document_text: str
-    research_plan: dict[str, object]
-    analysts: List[Analyst]
-    sections: Annotated[list, operator.add]
-    content: str
-    evidence_section: str
-    gaps_section: str
-    opportunities_section: str
-    players_section: str
-    messages: Annotated[list, operator.add]
+    path_spec: dict
+    # --- Per-Send payload carriers (set by the dispatcher, read by gather_evidence) ---
+    dimension: dict
+    path_brief: str
+    # --- Evidence gathered from the vaults (accumulated across parallel jobs) ---
+    evidence_memos: Annotated[list, operator.add]
+    evidence_signals: Annotated[list, operator.add]
+    memos_by_key: dict
+    # --- Drafted report sections ---
+    stated_work: str
+    methodology: str
+    regulatory_section: str
+    path_analysis_section: str
+    windows_section: str
+    effectiveness_section: str
+    challenges_section: str
+    team_section: str
+    followups_section: str
+    experts_section: str
+    evaluation_summary: str
+    # --- Output ---
     final_report: str
-    interview_signals: Annotated[list, operator.add]
-    # layers_briefing: str
+    messages: Annotated[list, operator.add]
 
 
 # ---------------------------------------------------------------------------
-# 2b. Streaming helpers (user-facing source formatting)
+# 2b. Small helpers (source formatting + selection)
 # ---------------------------------------------------------------------------
 def _join_with_and(items: list[str]) -> str:
     if not items:
@@ -152,7 +165,7 @@ def _join_with_and(items: list[str]) -> str:
 
 
 def _format_source_names(sources: list[str]) -> list[str]:
-    """Apply the script's citation rules to raw filenames for user-facing display:
+    """Apply the citation rules to raw filenames for user-facing display:
     drop extensions on normal files; collapse fisheries_releases_<year> files into
     a 'PIB releases from <year>' label without surfacing the raw filename."""
     normal: list[str] = []
@@ -199,16 +212,30 @@ def _extract_consulted_sources(response) -> list[str]:
 
 
 def _strip_system_messages(messages: list) -> list:
-    """Drop progress/status emits before sending chat history to an analyst or expert LLM —
-    those messages are for the user, not the conversation."""
+    """Drop progress/status emits when reading user-supplied input from the chat —
+    those messages are for the user, not part of the request."""
     return [
         m for m in messages
         if not (isinstance(m, AIMessage) and getattr(m, "name", None) == "System")
     ]
 
 
+def _resolve_selected_stores(selected) -> list[str]:
+    """Filter a requested selection against the known stores; default to all."""
+    selected = [s for s in (selected or DEFAULT_SELECTED_STORES) if s in STORE_REGISTRY]
+    if not selected:
+        selected = list(STORE_REGISTRY.keys())
+    return selected
+
+
+def _describe_data_sources(selected: list[str]) -> str:
+    """Plain-language, by-type description of the data made available for a run."""
+    descs = [DATA_SOURCE_DESCRIPTIONS[k] for k in selected if k in DATA_SOURCE_DESCRIPTIONS]
+    return _join_with_and(descs) if descs else "the internal source vaults"
+
+
 # ---------------------------------------------------------------------------
-# 2c. Document ingestion (uploaded PDF / Markdown input)
+# 2c. Document ingestion (uploaded PDF / Markdown / text input)
 # ---------------------------------------------------------------------------
 # Plain-text-like documents we can decode directly. Anything else is treated as
 # a PDF and handed to Gemini for native transcription.
@@ -244,7 +271,7 @@ def ingest_document(state: ResearchGraphState):
 
     Markdown/plain text is base64-decoded directly; PDFs are transcribed to
     Markdown by Gemini (native PDF ingestion, no local parser dependency). A
-    no-op when no document was supplied, so plain text-topic runs are unchanged.
+    no-op when no document was supplied, so pasted-text runs are unchanged.
     """
     document_b64 = state.get("document_b64")
     if not document_b64:
@@ -323,222 +350,264 @@ def ingest_document(state: ResearchGraphState):
     }
 
 
-# --- 3a. Research Planning ---
+# ---------------------------------------------------------------------------
+# 3. Normalise the path into one internal representation
+# ---------------------------------------------------------------------------
+# The path may arrive as a table, prose, an uploaded file, or pasted text. This
+# is the single place that reads any of those and pulls out the evaluable
+# substance. Everything downstream reads `path_spec`, never the raw entry.
+path_extraction_instructions = """You are reading a single PATH from a charity's theory of change and pulling out its evaluable substance.
 
-research_plan_instructions = """You are the lead researcher planning how to investigate a topic for an animal advocacy strategic briefing.
+A theory of change lays out how a charity expects to create change: the activities it carries out, the outputs those produce, the chain of outcomes it expects (early changes in knowledge, behaviour or attitudes, then intermediate and final outcomes), and the ultimate impact it is aiming at. The input below may be a table, prose, a transcribed document, or pasted text, and may describe a single activity or a small cluster of related activities.
 
-Research topic:
-{topic}
+Read it and extract:
+- summary: a short, neutral restatement of what the charity is proposing (2-4 sentences).
+- activities: the concrete actions the charity plans to take.
+- outputs: the direct products of those activities.
+- outcome_chain: the ordered chain of changes the charity expects, earliest first.
+- final_impact: the ultimate impact the charity is aiming at.
+- charity_flagged_opportunities: opportunities the charity itself names or clearly implies.
+- charity_assumptions: assumptions the charity makes (stated or clearly implied).
+- method_descriptor: a short label for the KIND of intervention.
+- team_info: any information about the charity's team, skills, capacity, or track record present in the input. Empty string if none.
 
-You have access to ONLY these document filestores (you must not assume any others exist):
-{store_menu}
+Use ONLY what is in the input. Do not invent activities, outcomes, or team information. If a field has no basis in the input, return an empty list or empty string for it.
 
-Your job:
-1. Choose ONE store as the PRIMARY anchor — the one whose evidence is most central to this specific topic.
-2. The remaining selected stores are SECONDARY — used to corroborate the primary evidence and to expose gaps.
-3. Decide HOW MANY analyst angles to deploy on this topic. Pick an integer between 1 and 4 inclusive — never more than 4. Use 1 for narrow, single-question topics; 2-3 for typical topics; reserve 4 only for genuinely multi-faceted topics that span distinct stakeholder groups or distinct sub-domains.
-4. Explain your reasoning briefly and concretely: why this primary store, why these stores corroborate well for THIS topic, AND why you chose this number of analyst angles.
-
-Respond as JSON with keys:
-- "primary": the store key string of the primary store
-- "secondary": list of the remaining selected store key strings
-- "num_analysts": integer between 1 and 4 inclusive — the number of analyst angles to deploy
-- "rationale": 2-4 sentences explaining the choice of primary store AND the number of analyst angles, written for a human reader
-- "brief": a short (3-5 sentence) plain-language note to the user describing how you'll approach the research, readable while the rest of the report generates"""
+INPUT:
+{input_text}"""
 
 
-def plan_research(state: ResearchGraphState):
+def _read_input_text(state: ResearchGraphState) -> str:
+    """Combine the typed/pasted text and any uploaded-document text into one blob."""
+    document_text = (state.get("document_text") or "").strip()
     topic = state.get("topic")
     if not topic:
-        # Fall back to the latest user-supplied message (CLI/message-input path),
-        # skipping the System progress emits that ingest_document may have added.
         non_system = _strip_system_messages(state.get("messages") or [])
         if non_system:
             topic = non_system[-1].content
+    topic = (topic or "").strip()
 
-    # Supplement behavior: an attached document and/or a typed instruction both
-    # feed the pipeline. The combined value becomes the effective topic so every
-    # downstream node (analysts, interviews, writers) sees the document content.
-    document_text = state.get("document_text")
+    parts = []
+    if topic:
+        parts.append(topic)
     if document_text:
-        doc_block = (
-            "ATTACHED DOCUMENT (the primary subject of this request):\n\n"
-            f"{document_text}"
-        )
-        if topic and str(topic).strip():
-            topic = f"USER INSTRUCTION:\n{topic}\n\n{doc_block}"
-        else:
-            topic = doc_block
+        parts.append(document_text)
+    return "\n\n".join(parts).strip()
 
-    selected = state.get("selected_stores") or DEFAULT_SELECTED_STORES
-    selected = [s for s in selected if s in STORE_REGISTRY]
-    if not selected:
-        selected = list(STORE_REGISTRY.keys())
-        
-    print(f"[plan_research] state.selected_stores={state.get('selected_stores')} → filtered={selected}")
 
-    store_menu = "\n".join(f"- {key}: {STORE_REGISTRY[key][1]}" for key in selected)
+def normalise_path(state: ResearchGraphState):
+    combined = _read_input_text(state)
 
-    result = llm.invoke([
-        SystemMessage(content=research_plan_instructions.format(topic=topic, store_menu=store_menu)),
-        HumanMessage(content="Produce the research plan as JSON.")
-    ])
-
-    content = result.content
-    if isinstance(content, list):
-        content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
-    else:
-        content = str(content)
-
-    content = content.strip()
-    if content.startswith("```"):
-        content = re.sub(r'^```(?:json)?\s*', '', content)
-        content = re.sub(r'\s*```$', '', content)
-
-    try:
-        plan = json.loads(content)
-    except json.JSONDecodeError:
-        # Fallback: first selected store is primary, rest secondary
-        plan = {
-            "primary": selected[0],
-            "secondary": selected[1:],
-            "num_analysts": 3,
-            "rationale": "Defaulted to the first selected store as primary due to a planning parse error.",
-            "brief": "Proceeding with a default research plan across the selected sources.",
+    # Empty fallback — the run still proceeds; sections will state the gap.
+    if not combined:
+        empty = PathSpec(summary="No theory-of-change path was provided.").model_dump()
+        empty["raw_text"] = ""
+        return {
+            "path_spec": empty,
+            "messages": [AIMessage(
+                content="[PROGRESS:10] No path text was found to evaluate; continuing with what is available.",
+                name="System",
+            )]
         }
 
-    # Sanitize: make sure primary/secondary only reference selected stores
-    if plan.get("primary") not in selected:
-        plan["primary"] = selected[0]
-    plan["secondary"] = [s for s in plan.get("secondary", []) if s in selected and s != plan["primary"]]
-    plan["selected_stores"] = selected
-
-    # Sanitize: clamp num_analysts to [1, 4]
+    structured_llm = llm.with_structured_output(PathSpec)
     try:
-        num_analysts = int(plan.get("num_analysts", 3))
-    except (TypeError, ValueError):
-        num_analysts = 3
-    num_analysts = max(1, min(4, num_analysts))
-    plan["num_analysts"] = num_analysts
+        spec = cast(PathSpec, structured_llm.invoke([
+            SystemMessage(content=path_extraction_instructions.format(input_text=combined)),
+            HumanMessage(content="Extract the path into the structured form."),
+        ]))
+        spec_dict = {
+            "summary": spec.summary or "",
+            "activities": list(spec.activities or []),
+            "outputs": list(spec.outputs or []),
+            "outcome_chain": list(spec.outcome_chain or []),
+            "final_impact": spec.final_impact or "",
+            "charity_flagged_opportunities": list(spec.charity_flagged_opportunities or []),
+            "charity_assumptions": list(spec.charity_assumptions or []),
+            "method_descriptor": spec.method_descriptor or "",
+            "team_info": spec.team_info or "",
+        }
+    except Exception as e:
+        print(f"[normalise_path] structured extraction failed: {e}; falling back to raw text.")
+        spec_dict = PathSpec(summary=combined[:2000]).model_dump()
 
+    # Keep the normalised raw text once (capped), for the Stated Work writer and as a fallback.
+    spec_dict["raw_text"] = combined[:8000]
+    if not spec_dict.get("summary"):
+        spec_dict["summary"] = combined[:2000]
+
+    print(f"[normalise_path] activities={len(spec_dict['activities'])}, outcomes={len(spec_dict['outcome_chain'])}, team_info={'yes' if spec_dict['team_info'] else 'no'}")
     return {
-        "research_plan": plan,
-        "topic": topic,
-        "selected_stores": selected,
-        "max_analysts": num_analysts,
+        "path_spec": spec_dict,
         "messages": [AIMessage(
-            content=f"[PROGRESS:10] Mapped out the approach.\n\n**How I'll approach this:** {plan.get('brief', '')}",
-            name="System"
+            content="[PROGRESS:10] Read the charity's path and pulled out the activities, expected outcomes and intended impact.",
+            name="System",
         )]
     }
 
-# --- 3b. Analyst Creation ---
 
-analyst_instructions="""You are tasked with creating a set of AI analyst personas. Follow these instructions carefully:
-1. First, review the research topic:
-{topic}
-2. Pick the top {max_analysts} themes.
-3. Assign one analyst to each theme."""
+def _path_brief(path_spec: dict) -> str:
+    """A compact rendering of the path for relevance-anchoring retrievals."""
+    parts = []
+    if path_spec.get("summary"):
+        parts.append(f"Summary: {path_spec['summary']}")
+    if path_spec.get("method_descriptor"):
+        parts.append(f"Method: {path_spec['method_descriptor']}")
+    if path_spec.get("activities"):
+        parts.append("Activities: " + "; ".join(path_spec["activities"]))
+    if path_spec.get("outcome_chain"):
+        parts.append("Expected outcomes: " + "; ".join(path_spec["outcome_chain"]))
+    if path_spec.get("final_impact"):
+        parts.append(f"Intended impact: {path_spec['final_impact']}")
+    return "\n".join(parts)
 
-def create_analysts(state: ResearchGraphState):
-    topic = state.get('topic')
-    if not topic and state.get('messages'):
-        topic = state['messages'][-1].content
 
-    research_plan = state.get('research_plan') or {}
-    max_analysts = state.get('max_analysts') or research_plan.get('num_analysts') or 3
-    try:
-        max_analysts = int(max_analysts)
-    except (TypeError, ValueError):
-        max_analysts = 3
-    max_analysts = max(1, min(4, max_analysts))
+# ---------------------------------------------------------------------------
+# 4. The fixed evaluation checklist (replaces auto-generated analyst angles)
+# ---------------------------------------------------------------------------
+# Same every run, so one path's write-up lines up against the next. Each entry is
+# a vault-backed dimension: a fixed retrieval brief and a static hint of which
+# stores are most relevant (intersected with the user's selection at dispatch).
+EVAL_DIMENSIONS = [
+    {
+        "key": "reg_legal",
+        "label": "Legal environment",
+        "stores": ["goi_pib", "local_academic", "foreign_academic"],
+        "brief": "The laws, regulations and formal compliance requirements in India that would apply to a nonprofit carrying out this kind of work — registration, foreign-funding rules (e.g. FCRA) for foreign charities, sector-specific animal-welfare law, and any licensing or permissions the activities would require.",
+    },
+    {
+        "key": "reg_political",
+        "label": "Political environment",
+        "stores": ["goi_pib", "local_academic", "onground_advocate"],
+        "brief": "The political climate in India relevant to this path — government priorities, political will or resistance on animal welfare and adjacent sectors, and how political dynamics could help or hinder the work.",
+    },
+    {
+        "key": "reg_safety",
+        "label": "Safety",
+        "stores": ["onground_advocate", "local_academic", "goi_pib"],
+        "brief": "Safety considerations for people carrying out this kind of work in India — risks to staff, volunteers or partners, and any documented incidents or sensitivities.",
+    },
+    {
+        "key": "reg_charity_attitudes",
+        "label": "Cultural attitudes towards foreign and local charities",
+        "stores": ["onground_advocate", "local_academic", "foreign_academic"],
+        "brief": "How foreign and local charities/nonprofits are perceived in India in this domain — trust, suspicion, acceptance or hostility towards outside organisations versus homegrown ones.",
+    },
+    {
+        "key": "path_public",
+        "label": "Public engagement and public consciousness of animal welfare",
+        "stores": ["local_academic", "foreign_academic", "onground_advocate"],
+        "brief": "The level of public engagement and public consciousness of animal welfare in India relevant to this path — attitudes, awareness, willingness to act, and how receptive the public is likely to be to the activities.",
+    },
+    {
+        "key": "path_tech",
+        "label": "Technological feasibility",
+        "stores": ["foreign_academic", "local_academic", "onground_advocate"],
+        "brief": "The technological feasibility of the charity's activities in the Indian context — whether the methods or technologies the path relies on are available, mature and practical here.",
+    },
+    {
+        "key": "path_cooperation",
+        "label": "Industry and government cooperation",
+        "stores": ["goi_pib", "onground_advocate", "local_academic"],
+        "brief": "The willingness of industry bodies and government bodies in India to cooperate with this kind of work, including their attitudes towards cooperating with nonprofits.",
+    },
+    {
+        "key": "windows_unspotted",
+        "label": "Opportunities the charity may not have spotted",
+        "stores": ["foreign_academic", "onground_advocate", "local_academic", "goi_pib"],
+        "brief": "Time-sensitive openings or levers in India that this charity's path could exploit but may not have noticed — emerging policy moments, market shifts, coalitions, producer segments, electoral cycles or attention spikes relevant to its activities.",
+    },
+    {
+        "key": "challenges_cultural",
+        "label": "Cultural challenges",
+        "stores": ["local_academic", "onground_advocate", "foreign_academic"],
+        "brief": "Cultural challenges in India that could obstruct this path — social identity, religion, caste, dietary and livelihood realities, and other cultural factors that shape what is acceptable.",
+    },
+    {
+        "key": "challenges_landscape",
+        "label": "Animal advocacy landscape challenges",
+        "stores": ["onground_advocate", "local_academic", "foreign_academic"],
+        "brief": "Challenges in the Indian animal-advocacy landscape itself relevant to this path — crowding, fragmentation, funding constraints, capacity gaps, or strategic tensions among advocacy actors.",
+    },
+    {
+        "key": "team_players",
+        "label": "Existing players doing similar work",
+        "stores": ["onground_advocate", "local_academic", "goi_pib"],
+        "brief": "Organisations, coalitions, government bodies or individuals already doing work similar to this charity's path in India, and what the evidence says they are currently doing.",
+    },
+]
 
-    structured_llm = llm.with_structured_output(Perspectives)
-    system_message = analyst_instructions.format(
-        topic=topic,
-        max_analysts=max_analysts
-    )
 
-    raw_res = structured_llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Generate the set of analysts.")])
-    perspectives_res = cast(Perspectives, raw_res)
-
-    angles = [a.role for a in perspectives_res.analysts]
+# ---------------------------------------------------------------------------
+# 5. Evidence gathering (one File Search retrieval per dimension)
+# ---------------------------------------------------------------------------
+def dispatch_dimensions(state: ResearchGraphState):
+    """Passthrough that emits a progress note; the fan-out happens on its edge."""
     return {
-        "analysts": perspectives_res.analysts,
-        "topic": topic,
-        "max_analysts": max_analysts,
-        "messages": [
-            AIMessage(
-                content=f"[PROGRESS:15] Mapped out the angles to investigate.\n\nLooking at: {_join_with_and(angles)}.",
-                name="System"
-            ),
-            AIMessage(
-                content="[PROGRESS:18] Starting deep research across the source vaults. This is the slow part — each angle is checked against multiple stores.",
-                name="System"
-            ),
-        ]
+        "messages": [AIMessage(
+            content="[PROGRESS:15] Checking the path against the evidence vaults across the full evaluation checklist.",
+            name="System",
+        )]
     }
 
-question_instructions = """You are an analyst tasked with interviewing an expert to learn about a specific topic.
-Begin by introducing yourself using a name that fits your persona, and then ask your question.
-Continue to ask questions to drill down and refine your understanding of the topic.
-When you are satisfied, complete the interview with: "Thank you so much for your help!"
-Here is your topic of focus and set of goals: {goals}"""
 
-def generate_question(state: InterviewState):
-    analyst = state["analyst"]
-    messages = _strip_system_messages(state["messages"])
+def route_to_dimensions(state: ResearchGraphState):
+    """Fan out one gather_evidence job per vault-backed dimension."""
+    path_spec = state.get("path_spec") or {}
+    brief = _path_brief(path_spec)
+    selected = _resolve_selected_stores(state.get("selected_stores"))
+    return [
+        Send("gather_evidence", {"dimension": dim, "path_brief": brief, "selected_stores": selected})
+        for dim in EVAL_DIMENSIONS
+    ]
 
-    system_message = question_instructions.format(goals=analyst.persona)
-    question = llm.invoke([SystemMessage(content=system_message)] + messages)
-    return {"messages": [question]}
 
-def generate_answer(state: InterviewState):
-    """Answers questions strictly using internal vaults via Gemini File Search."""
-    analyst = state["analyst"]
-    messages = _strip_system_messages(state["messages"])
-    research_plan = state.get("interview_research_plan", {}) or {}
+def gather_evidence(state: ResearchGraphState):
+    """Strictly retrieve, in ONE call, what the vaults hold for a single dimension.
 
-    selected = research_plan.get("selected_stores") or DEFAULT_SELECTED_STORES
-    selected = [str(s) for s in selected if s in STORE_REGISTRY]
-    if not selected:
-        selected = list(STORE_REGISTRY.keys())
-
-    primary = research_plan.get("primary")
-    if not isinstance(primary, str) or primary not in selected:
-        primary = selected[0]
-    secondary = [s for s in selected if s != primary]
-
-    active_store_ids = [STORE_REGISTRY[k][0] for k in selected]
-
-    print(f"[generate_answer] research_plan.selected={selected}, active_store_ids={active_store_ids}")
-
-    primary_desc = STORE_REGISTRY[primary][1]
-    secondary_desc = "\n".join(f"    - {STORE_REGISTRY[k][1]}" for k in secondary) or "    - (none — only the primary store is selected)"
-
-    pib_selected = "goi_pib" in selected
-
-    expert_instructions = f"""You are a strict data-retrieval expert.
-    Analyst focus: {analyst.persona}
-
-    SOURCE STRATEGY FOR THIS RESEARCH:
-    - PRIMARY anchor store: {primary_desc}
-      Treat this as your main source of evidence — lead with it.
-    - SECONDARY stores (use to corroborate the primary evidence and to expose gaps):
-{secondary_desc}
-    You may ONLY use the stores listed above. No other stores exist for this task.
-
-    CRITICAL RULES:
-    1. You have NO knowledge outside of the files in the stores listed above.
-    2. If the answer is not in the files, say EXACTLY: "The internal vaults do not contain this information."
-    3. Do not use your own training data to fill in gaps.
-    4. CORROBORATION PROTOCOL: For every major claim drawn from the primary store, you MUST actively cross-reference it against the secondary stores and state whether they corroborate, contradict, or are silent on the issue. Where the secondary stores are silent on something the primary store treats as important, name that explicitly as a GAP.
-    {"5. PIB SOURCES: Government of India press releases are stored in files named `fisheries_releases_<year>` (e.g. `fisheries_releases_2024`, `fisheries_releases_2022_final`). For any claim drawn from one of these files, you MUST extract the date of release and the exact title of the specific press release — these are required for its citation, because the filename cannot serve as the citation. For all non-PIB sources, the citation is just the filename." if pib_selected else "5. (No PIB store selected for this task.)"}
-    6. ONE-CLAIM-ONE-SOURCE BY DEFAULT. A citation must support the specific claim it sits next to. If you make a claim drawn from source A, cite source A; don't cite source B because it's topically nearby. Place citations mid-sentence at the point each source's contribution applies, rather than parking them all at the end of a sentence.
-    7. WHEN YOU DO COMBINE SOURCES, SAY SO. If you produce a claim that genuinely combines information from multiple sources to suggest a mechanism, recommendation, or causal link that no single source states, this is your own synthesis — flag it as such with explicit framing ("taken together, these sources suggest…", "this implies…") and cite ALL contributing sources at the point of synthesis. Do not present a synthesis under a single citation as if that one source made the claim.
-
-    {GLOBAL_CITATION_RULES}
+    Carries over the strict-retrieval contract from the old expert node: no outside
+    knowledge, an exact no-knowledge phrase, the PIB citation handling, and the
+    citation rules — but as a single targeted retrieval rather than an interview.
     """
+    dimension = state["dimension"]
+    path_brief = state.get("path_brief", "")
+    selected = _resolve_selected_stores(state.get("selected_stores"))
+
+    store_keys = [k for k in dimension.get("stores", []) if k in selected] or selected
+    active_store_ids = [STORE_REGISTRY[k][0] for k in store_keys]
+    pib_selected = "goi_pib" in store_keys
+
+    print(f"[gather_evidence] {dimension['key']} → stores={store_keys}")
+
+    pib_rule = (
+        "5. PIB SOURCES: Government of India press releases live in files named `fisheries_releases_<year>`. For any claim drawn from one of these, extract the date and exact title of the specific release — these are required for the citation, because the filename cannot serve as the citation. For all non-PIB sources, the citation is just the filename."
+        if pib_selected else
+        "5. (No PIB store is in scope for this retrieval.)"
+    )
+
+    expert_instructions = f"""You are a strict data-retrieval analyst evaluating one part of a charity's theory of change against internal source vaults.
+
+FOCUS OF THIS RETRIEVAL — {dimension['label']}:
+{dimension['brief']}
+
+CRITICAL RULES:
+1. You have NO knowledge outside the files in the stores provided to you.
+2. If the files do not contain information relevant to the focus, say EXACTLY: "The internal vaults do not contain this information."
+3. Do not use your own training data to fill gaps.
+4. Be specific and preserve all figures, percentages and statistics exactly as written.
+{pib_rule}
+6. ONE-CLAIM-ONE-SOURCE BY DEFAULT. A citation must support the specific claim it sits next to. Place citations mid-sentence at the point each source's contribution applies.
+7. WHEN YOU COMBINE SOURCES, SAY SO. If a claim genuinely combines multiple sources into a mechanism or link no single source states, flag it as synthesis ("taken together, these sources suggest…") and cite ALL contributing sources.
+
+{GLOBAL_CITATION_RULES}
+"""
+
+    prompt = (
+        f"{dimension['brief']}\n\n"
+        f"For relevance, the charity's proposed path is:\n{path_brief}\n\n"
+        "Report only what the provided files actually contain that bears on the focus above. "
+        "If they contain nothing relevant, say so using the exact phrase from the rules."
+    )
 
     model_config = types.GenerateContentConfig(
         system_instruction=expert_instructions,
@@ -546,53 +615,36 @@ def generate_answer(state: InterviewState):
         temperature=0.0,
     )
 
-    chat_history = "\n".join([f"{m.type.capitalize()}: {m.content}" for m in messages])
-    prompt = f"Read our chat history and answer the latest question using your files:\n\n{chat_history}"
-
-    print(f"\n\n👀 --- WHAT THE EXPERT WAS ASKED ({analyst.name}) ---")
-    print(messages[-1].content)
-
     max_tries = 3
     response = None
-
     for try_count in range(max_tries):
         try:
             response = gemini_client.models.generate_content(
                 model="gemini-3-flash-preview",
                 contents=prompt,
-                config=model_config
+                config=model_config,
             )
             break
-
         except errors.ServerError as e:
-            print(f"\n⚠️ Server glitch on try {try_count + 1}: {e}")
-
+            print(f"[gather_evidence] server glitch on try {try_count + 1} ({dimension['key']}): {e}")
             if try_count < max_tries - 1:
-                print("Waiting 3 seconds before we try again...")
                 time.sleep(3)
             else:
-                print("Server is fully down. Moving on without this answer.")
-                fail_signal = AIMessage(
-                    content=f"[PROGRESS:30] The {analyst.role} angle could not be checked — the source vault was unreachable.",
-                    name="System",
-                )
                 return {
-                    "messages": [
-                        fail_signal,
-                        AIMessage(content="FLAG_NO_KNOWLEDGE", name="expert"),
-                    ],
-                    "interview_signals": [{
-                        "role": analyst.role,
-                        "sources": [],
-                        "no_knowledge": True,
+                    "evidence_memos": [{
+                        "key": dimension["key"], "label": dimension["label"],
+                        "memo": "", "no_knowledge": True, "sources": [],
                     }],
+                    "evidence_signals": [{
+                        "label": dimension["label"], "sources": [], "no_knowledge": True,
+                    }],
+                    "messages": [AIMessage(
+                        content=f"[PROGRESS:30] The {dimension['label'].lower()} check couldn't be completed — a source vault was unreachable.",
+                        name="System",
+                    )],
                 }
 
-    if response and response.text:
-        answer_text = response.text
-    else:
-        answer_text = "The internal vaults do not contain this information."
-
+    answer_text = response.text if (response and response.text) else "The internal vaults do not contain this information."
     consulted_sources = _extract_consulted_sources(response) if response else []
     used_files = bool(consulted_sources) or (
         response is not None
@@ -600,507 +652,599 @@ def generate_answer(state: InterviewState):
         and response.candidates[0].grounding_metadata is not None
     )
 
-    print(f"\n🧠 --- RAW EXPERT ANSWER ---")
-    print(answer_text)
-    print(f"\n✅ [TRIGGER] Did the Expert use internal files? -> {used_files}")
-    if consulted_sources:
-        print(f"📚 [SOURCES] Consulted: {consulted_sources}")
-    print("---------------------------------------------------\n")
+    no_knowledge = (not used_files) or ("do not contain this information" in answer_text.lower())
+    memo = "" if no_knowledge else answer_text
 
-    if not used_files or "do not contain this information" in answer_text.lower():
-        answer_text = "FLAG_NO_KNOWLEDGE"
-
-    no_knowledge = (answer_text == "FLAG_NO_KNOWLEDGE")
-
-    # User-facing progress emit — what sources this turn actually pulled from.
     formatted_sources = _format_source_names(consulted_sources)
     if no_knowledge:
-        signal_text = (
-            f"[PROGRESS:30] No information found for the {analyst.role} angle "
-            f"in the available source vaults."
-        )
+        signal_text = f"[PROGRESS:30] No vault information found for the {dimension['label'].lower()} check."
     elif formatted_sources:
-        signal_text = (
-            f"[PROGRESS:30] Consulted {_join_with_and(formatted_sources)} "
-            f"for the {analyst.role} angle."
-        )
+        signal_text = f"[PROGRESS:30] Consulted {_join_with_and(formatted_sources)} for the {dimension['label'].lower()} check."
     else:
-        signal_text = (
-            f"[PROGRESS:30] Returned information for the {analyst.role} angle "
-            f"(specific sources not surfaced)."
-        )
-    signal_msg = AIMessage(content=signal_text, name="System")
+        signal_text = f"[PROGRESS:30] Returned information for the {dimension['label'].lower()} check."
 
     return {
-        "messages": [
-            signal_msg,
-            AIMessage(content=answer_text, name="expert"),
-        ],
-        "interview_signals": [{
-            "role": analyst.role,
-            "sources": consulted_sources,
-            "no_knowledge": no_knowledge,
+        "evidence_memos": [{
+            "key": dimension["key"], "label": dimension["label"],
+            "memo": memo, "no_knowledge": no_knowledge, "sources": consulted_sources,
         }],
+        "evidence_signals": [{
+            "label": dimension["label"], "sources": consulted_sources, "no_knowledge": no_knowledge,
+        }],
+        "messages": [AIMessage(content=signal_text, name="System")],
     }
-
-def save_interview(state: InterviewState):
-    messages = state["messages"]
-    interview = get_buffer_string(messages)
-    return {"interview": interview}
-
-def route_messages(state: InterviewState, name: str = "expert"):
-    messages = state["messages"]
-    max_num_turns = state.get('max_num_turns', 2)
-
-    last_message = messages[-1]
-    if last_message.content == "FLAG_NO_KNOWLEDGE":
-        return 'save_interview'
-
-    num_responses = len([m for m in messages if isinstance(m, AIMessage) and m.name == name])
-    if num_responses >= max_num_turns:
-        return 'save_interview'
-
-    last_question = None
-    for m in reversed(messages[:-1]):
-        if isinstance(m, AIMessage) and getattr(m, "name", None) in (name, "System"):
-            continue
-        last_question = m
-        break
-
-    if last_question and "Thank you so much for your help" in str(last_question.content):
-        return 'save_interview'
-
-    return "ask_question"
-
-section_writer_instructions = """You are an expert technical writer.
-Write a short section of a report based on the interview.
-Make your title engaging based upon the focus area: {focus}
-
-CRITICAL RULES:
-1. Write from a completely objective, third-person view.
-2. DO NOT mention the interviewer, the expert, or any of the AI persona names in your text.
-3. You MUST preserve every inline citation from the interview EXACTLY as written — including the <span> wrapper and its contents. Never reformat, rename, shorten, or drop a citation.
-4. NEVER summarise away numeric or statistical data. Preserve all figures, percentages, currency values, and multipliers exactly as stated."""
-
-def write_section(state: InterviewState):
-    interview = state["interview"]
-    analyst = state["analyst"]
-
-    if "FLAG_NO_KNOWLEDGE" in interview:
-        return {"sections": ["FLAG_NO_KNOWLEDGE"]}
-
-    system_message = section_writer_instructions.format(focus=analyst.description)
-    section = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content=f"Use this interview to write your section:\n{interview}")])
-
-    content = section.content
-    if isinstance(content, list):
-        content = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in content])
-    else:
-        content = str(content)
-
-    return {"sections": [content]}
-
-# ---------------------------------------------------------------------------
-# 4. Build the Interview Graph (The Inner Loop)
-# ---------------------------------------------------------------------------
-interview_builder = StateGraph(InterviewState)
-interview_builder.add_node("ask_question", generate_question)
-interview_builder.add_node("answer_question", generate_answer)
-interview_builder.add_node("save_interview", save_interview)
-interview_builder.add_node("write_section", write_section)
-
-interview_builder.add_edge(START, "ask_question")
-interview_builder.add_edge("ask_question", "answer_question")
-interview_builder.add_conditional_edges("answer_question", route_messages, ['ask_question', 'save_interview'])
-interview_builder.add_edge("save_interview", "write_section")
-interview_builder.add_edge("write_section", END)
-
-# ---------------------------------------------------------------------------
-# 5. Build the Main Report Graph (The Outer Loop)
-# ---------------------------------------------------------------------------
-def initiate_all_interviews(state: ResearchGraphState):
-    topic = state["topic"]
-    interview_research_plan = state.get("research_plan", {})
-    return [Send("conduct_interview", {
-        "analyst": analyst,
-        "interview_research_plan": interview_research_plan,
-        "messages": [HumanMessage(
-            content=f"We are building a Strategic Country Profile for {topic}. As our {analyst.name}, identify the key advocacy bottlenecks and windows of opportunity in your specialized area."
-        )]
-    }) for analyst in state["analysts"]]
 
 
 def collect_sections(state: ResearchGraphState):
-    """Join point — waits for all parallel interviews to complete before checking knowledge."""
-    signals = state.get("interview_signals", []) or []
+    """Join point — waits for all parallel retrievals, then reports what was found.
+    No abort: thin knowledge is handled per-paragraph by the writers."""
+    signals = state.get("evidence_signals", []) or []
 
     all_sources: list[str] = []
     seen_sources: set[str] = set()
-    empty_roles: list[str] = []
+    empty_labels: list[str] = []
     seen_empty: set[str] = set()
     for sig in signals:
-        role = sig.get("role") or "an unspecified angle"
-        if sig.get("no_knowledge") and role not in seen_empty:
-            seen_empty.add(role)
-            empty_roles.append(role)
+        label = sig.get("label") or "an evaluation point"
+        if sig.get("no_knowledge") and label not in seen_empty:
+            seen_empty.add(label)
+            empty_labels.append(label)
         for src in sig.get("sources", []) or []:
             if src not in seen_sources:
                 seen_sources.add(src)
                 all_sources.append(src)
 
     formatted_sources = _format_source_names(all_sources)
-
-    parts: list[str] = ["[PROGRESS:50] Gathered evidence from the source vaults."]
+    parts: list[str] = ["[PROGRESS:50] Gathered the available evidence from the source vaults."]
     if formatted_sources:
         parts.append("")
         parts.append(f"Drawing on: {_join_with_and(formatted_sources)}.")
-    for role in empty_roles:
+    if empty_labels:
         parts.append("")
         parts.append(
-            f"One investigative angle (the {role}) returned no information from the available sources."
+            "Some checks found no information in the available sources and will be flagged for more data: "
+            + _join_with_and([lbl.lower() for lbl in empty_labels]) + "."
         )
 
-    return {
-        "messages": [AIMessage(content="\n".join(parts), name="System")]
-    }
-
-
-def check_knowledge(state: ResearchGraphState):
-    sections = state.get("sections", [])
-
-    flat_sections = []
-    for s in sections:
-        if isinstance(s, list):
-            for item in s:
-                if isinstance(item, dict):
-                    flat_sections.append(item.get("text", ""))
-                else:
-                    flat_sections.append(str(item))
-        else:
-            if isinstance(s, dict):
-                flat_sections.append(s.get("text", ""))
-            else:
-                flat_sections.append(str(s))
-
-    valid_sections = [s for s in flat_sections if s != "FLAG_NO_KNOWLEDGE"]
-
-    if not valid_sections:
-        return "abort_report"
-    return "prepare_writing"
-
-def abort_report(state: ResearchGraphState):
-    final_message = "not enough internal knowledge"
-    print("\n⚠️ ABORTED: Not enough internal knowledge.\n")
-    return {
-        "final_report": final_message,
-        "messages": [AIMessage(
-            content="[PROGRESS:ABORTED] Not enough information in the available source vaults to produce a confident briefing on this topic.",
-            name="System"
-        )]
-    }
+    return {"messages": [AIMessage(content="\n".join(parts), name="System")]}
 
 
 def prepare_writing(state: ResearchGraphState):
-    """Flatten and prepare raw interview sections for the section writers."""
-    sections = state.get("sections", [])
-
-    flat_sections = []
-    for s in sections:
-        if isinstance(s, list):
-            for item in s:
-                if isinstance(item, dict):
-                    flat_sections.append(item.get("text", ""))
-                else:
-                    flat_sections.append(str(item))
-        else:
-            if isinstance(s, dict):
-                flat_sections.append(s.get("text", ""))
-            else:
-                flat_sections.append(str(s))
-
-    valid_sections = [s for s in flat_sections if s != "FLAG_NO_KNOWLEDGE"]
-    formatted_str_sections = "\n\n---\n\n".join(valid_sections)
-
+    """Bucket the gathered memos by dimension key so each writer reads only its own."""
+    memos = state.get("evidence_memos", []) or []
+    memos_by_key = {m["key"]: m for m in memos}
     return {
-        "content": formatted_str_sections,
+        "memos_by_key": memos_by_key,
         "messages": [AIMessage(
-            content="[PROGRESS:55] Drafting the briefing — synthesizing evidence, gaps, opportunities, and players in parallel.",
-            name="System"
+            content="[PROGRESS:55] Drafting the evaluation — regulatory picture, path relevance, opportunities, challenges and team in parallel.",
+            name="System",
         )]
     }
 
 
 # ---------------------------------------------------------------------------
-# 5b. Four Report Section Writers
+# 5b. Shared writer scaffolding
 # ---------------------------------------------------------------------------
+# Universal rules every section writer inherits.
+WRITER_BASE_RULES = """SHARED RULES:
+1. Write in objective, third-person prose. Never mention this tool, the analysis software, "the model", AI personas, interviewers, or the internal source/vault names.
+2. Preserve every inline citation EXACTLY as given — the <span> wrapper and its contents. Never reformat, rename, shorten or drop a citation.
+3. Never summarise away numeric or statistical data. Preserve all figures, percentages and currency values exactly.
+4. Work point by point. Include what the evidence supports; where a specific point isn't supported by the provided material, write a short, plain-language note that more data is needed on that point and move on. Never write internal markers verbatim, never invent content, and never drop a subsection or its title."""
 
-evidence_instructions = """You are a Lead Strategist writing the "What the Evidence Says" section of a strategic briefing for: {topic}.
-
-You will receive raw research memos gathered from internal document vaults. Your job is to synthesize what the evidence actually tells us into a clear, unified analytical narrative.
-
-CRITICAL RULES:
-1. Present this as a unified, objective briefing. DO NOT mention any AI analyst names, interviewers, or experts.
-2. NEVER summarise away numeric or statistical data. Every figure, percentage, currency value, multiplier, or statistic from the memos MUST appear in your output exactly as stated.
-3. Preserve highly insightful information verbatim — do not water down sharp observations.
-4. The memos contain explicit corroboration findings (where sources agree or contradict each other). Extract and foreground these — when multiple sources corroborate a claim, say so; when they conflict, present the conflict rather than picking a side.
-5. You are receiving the full set of interview memos. Pull only what speaks to what the evidence SAYS — leave gaps, opportunities, and player mapping to the other sections.
-6. SYNTHESIS VS. EVIDENCE. If a claim combines information from multiple sources to produce a recommendation, mechanism, or causal link that no single source states, it is synthesis — not direct evidence. Default to rewriting such claims as separate claims each tied to what its source actually says. Only when the synthesis itself is genuinely the useful insight, keep it but frame it transparently as analysis ("the evidence taken together suggests…", "these findings point toward…") and cite ALL the sources it draws on.
-7. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
-8. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 6) and all contributing sources are cited together at the end.
-
-{citation_rules}
-
-Research memos:
-{context}"""
+# Used inside a memo block to tell the writer (not the reader) that a point is empty.
+_GAP_MARKER = "(No relevant information was found in the available sources for this point. Write a brief, plain-language note that the tool needs more data here, and keep the subsection in place.)"
 
 
-def write_evidence(state: ResearchGraphState):
-    content = state.get("content", "")
-    topic = state["topic"]
+def _format_memo_block(memos_by_key: dict, key: str, fallback_label: str) -> str:
+    m = memos_by_key.get(key)
+    label = (m or {}).get("label") or fallback_label
+    if m and not m.get("no_knowledge") and (m.get("memo") or "").strip():
+        return f"### {label}\n{m['memo'].strip()}"
+    return f"### {label}\n{_GAP_MARKER}"
 
-    system_message = evidence_instructions.format(
-        topic=topic, 
-        context=content, 
-        citation_rules=GLOBAL_CITATION_RULES
-    )
-    result = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'What the Evidence Says' section based on these research memos.")])
 
+def _bullet_list(items: list[str]) -> str:
+    items = [i for i in (items or []) if str(i).strip()]
+    return "\n".join(f"- {i}" for i in items) if items else "(none provided)"
+
+
+def _llm_text(result) -> str:
     text = result.content
     if isinstance(text, list):
         text = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in text])
-    else:
-        text = str(text)
-
-    return {
-        "evidence_section": text,
-    }
-
-
-gaps_instructions = """You are a strategic research analyst writing the "Gaps in the Evidence" section of a briefing for: {topic}.
-
-You will receive research memos gathered from internal document vaults. Your job is to identify what we DON'T know — what is missing, unstudied, underrepresented, or left unanswered by the available evidence.
-
-INSTRUCTIONS:
-1. Be specific about what's missing. Don't just say "more research is needed" — name the exact topics, populations, geographies, time periods, or dynamics that are absent.
-2. Reference what evidence DOES exist to frame the boundaries of knowledge — this shows where the gaps begin.
-3. Consider: What questions does the available evidence raise but not answer? What assumptions does it make without supporting data?
-4. Think about: Are there stakeholder perspectives missing? Geographic blind spots? Temporal gaps (outdated data)? Methodological limitations?
-5. DO NOT mention any AI analyst names, interviewers, or experts.
-6. Preserve any numeric data that contextualizes a gap.
-7. The memos contain explicit GAP findings flagged during research (where the primary source raised something the secondary sources were silent on). Extract these flagged gaps directly — they are the backbone of this section — and supplement them with any further gaps you identify.
-8. You are receiving the full set of interview memos. Pull only what speaks to what is MISSING or unanswered — leave confirmed evidence, opportunities, and player mapping to the other sections.
-9. SYNTHESIS VS. EVIDENCE. If a claim combines information from multiple sources to produce a recommendation, mechanism, or causal link that no single source states, it is synthesis — not direct evidence. Default to rewriting such claims as separate claims each tied to what its source actually says. Only when the synthesis itself is genuinely the useful insight, keep it but frame it transparently as analysis ("the evidence taken together suggests…", "these findings point toward…") and cite ALL the sources it draws on.
-10. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
-11. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 9) and all contributing sources are cited together at the end.
-
-{citation_rules}
-
-Research memos:
-{context}"""
-
-
-def write_gaps(state: ResearchGraphState):
-    content = state.get("content", "")
-    topic = state["topic"]
-
-    system_message = gaps_instructions.format(
-        topic=topic, 
-        context=content,
-        citation_rules=GLOBAL_CITATION_RULES
-    )
-    result = llm_creative.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'Gaps in the Evidence' section. Identify what we don't know based on the available evidence.")])
-
-    text = result.content
-    if isinstance(text, list):
-        text = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in text])
-    else:
-        text = str(text)
-
-    return {
-        "gaps_section": text,
-    }
-
-
-opportunities_instructions = """You are a strategic analyst writing the "Windows of Opportunity" section of a briefing for: {topic}.
-
-You will receive research memos gathered from internal document vaults. Your job is to identify time-sensitive opportunities the animal advocacy movement should act on, framed through the lessons below.
-
-{goodgrowth_lessons}
-
-INSTRUCTIONS:
-1. Anchor every opportunity in the Good Growth lessons above — for each opportunity, make explicit which lesson(s) it draws on (e.g. a regulatory opening connects to "contextual homework"; a coalition opening connects to "peer spaces" or "stakeholders aren't fixed obstacles").
-2. Be concrete about LEVERS: name the specific thing an advocate or funder could actually do — a policy moment to act on, a producer segment to engage, a coalition to build, a debrief practice to fund.
-3. Where the memos name on-the-ground organisations, community leaders, or producers, identify them as potential COLLABORATORS and say what role they could play.
-4. Focus on windows that could CLOSE — emerging leverage points, policy moments, market shifts, electoral cycles, attention spikes, crises requiring response. Be concrete about WHY each is time-sensitive.
-5. FAVOUR RECENT DATA: when memos conflict or span different time periods, weight the most recent evidence most heavily, and note when an opportunity rests on older data that may have shifted.
-6. Ground every opportunity in specific evidence from the memos. Do not speculate beyond what the data supports. If the evidence does not indicate time-sensitive opportunities, say so transparently rather than fabricating urgency.
-7. NEVER summarise away numeric or statistical data. Preserve all figures exactly.
-8. DO NOT mention any AI analyst names, interviewers, or experts.
-9. SYNTHESIS VS. EVIDENCE. Opportunities ARE often syntheses — combining evidence into a lever is this section's job — but the synthesis must still be honest. When you produce an opportunity that combines information from multiple sources to suggest a mechanism, recommendation, or causal link that no single source states, frame it transparently as analysis ("the evidence taken together suggests…", "these findings point toward…") and cite ALL the sources it draws on. Do not present a synthesis under a single citation as if that one source made the claim.
-10. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
-11. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 9) and all contributing sources are cited together at the end.
-
-{citation_rules}
-
-Research memos:
-{context}"""
-
-
-def write_opportunities(state: ResearchGraphState):
-    content = state.get("content", "")
-    topic = state["topic"]
-
-    system_message = opportunities_instructions.format(
-        topic=topic,
-        context=content,
-        goodgrowth_lessons=GOODGROWTH_LESSONS,
-        citation_rules=GLOBAL_CITATION_RULES
-    )
-    result = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'Windows of Opportunity' section. Identify time-sensitive opportunities or crises for animal advocacy.")])
-
-    text = result.content
-    if isinstance(text, list):
-        text = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in text])
-    else:
-        text = str(text)
-
-    return {
-        "opportunities_section": text,
-    }
-
-
-players_instructions = """You are a strategic analyst writing the "Current Players" section of a briefing for: {topic}.
-
-You will receive research memos gathered from internal document vaults. Your job is to identify current players in the animal advocacy ecosystem relevant to the query and what they're currently up to.
-
-INSTRUCTIONS:
-1. List organisations, coalitions, government bodies, or key individuals mentioned in the evidence that are active on this topic. Do not treat any of them as fixed or immovable — where the evidence allows, note whether a player could be an alternative ally, a smaller/medium producer worth engaging, or a source of backlash that could become a strategic opening.
-2. For each player, note what the evidence says about their current activities, positions, or campaigns.
-3. BE TRANSPARENT ABOUT LIMITATIONS: The internal document vaults may have limited information about who the current players are and what they're doing right now. If the evidence doesn't clearly identify active players, say so explicitly. Do NOT invent or assume what organisations are doing.
-4. DO NOT mention any AI analyst names, interviewers, or experts.
-5. Preserve any numeric data (e.g., membership numbers, funding figures) exactly as stated.
-6. If very little information about players exists in the vaults, a short honest section is better than a padded speculative one.
-7. SYNTHESIS VS. EVIDENCE. If a claim about a player combines information from multiple sources to attribute a position, strategy, or relationship that no single source states, it is synthesis — not direct evidence. Default to rewriting such claims as separate claims each tied to what its source actually says. Only when the synthesis itself is genuinely the useful insight, frame it transparently as analysis ("the evidence taken together suggests…") and cite ALL the sources it draws on.
-8. CITATIONS MUST SUPPORT THE SPECIFIC CLAIM THEY SIT NEXT TO. A citation is not a topic tag — it is a guarantee that the cited source contains that specific claim. If a claim has roots in two sources, both must be cited. If one citation covers only part of a claim, the rest must either be cited from its actual source or removed. A source whose connection to the claim is your inference, not the source's own statement, is not a valid citation.
-9. PLACE CITATIONS WHERE THEY ARE EARNED. Citations do NOT have to sit at the end of a sentence. When a sentence draws on one source for one part and another for another, place each citation mid-sentence at the point its source applies — this keeps attribution tight and exposes any unsupported bridging. Only put a citation at the end of a sentence when the entire sentence is genuinely supported by that source, OR when the sentence is an explicit synthesis (per rule 7) and all contributing sources are cited together at the end.
-
-{citation_rules}
-
-Research memos:
-{context}"""
-
-
-def write_players(state: ResearchGraphState):
-    content = state.get("content", "")
-    topic = state["topic"]
-
-    system_message = players_instructions.format(
-        topic=topic, 
-        context=content,
-        citation_rules=GLOBAL_CITATION_RULES
-    )
-    result = llm.invoke([SystemMessage(content=system_message)] + [HumanMessage(content="Write the 'Current Players' section. Identify active players in the animal advocacy ecosystem relevant to this topic.")])
-
-    text = result.content
-    if isinstance(text, list):
-        text = " ".join([b.get("text", "") if isinstance(b, dict) else str(b) for b in text])
-    else:
-        text = str(text)
-
-    return {
-        "players_section": text,
-    }
+    return str(text)
 
 
 # ---------------------------------------------------------------------------
-# 5c. Finalize Report
+# 5c. Section writers
 # ---------------------------------------------------------------------------
+def write_stated_work(state: ResearchGraphState):
+    """Section 1 — neutral restatement of the charity's path. No evaluation."""
+    ps = state.get("path_spec") or {}
+    details = (
+        f"Summary: {ps.get('summary', '')}\n\n"
+        f"Activities:\n{_bullet_list(ps.get('activities'))}\n\n"
+        f"Outputs:\n{_bullet_list(ps.get('outputs'))}\n\n"
+        f"Expected chain of outcomes (earliest first):\n{_bullet_list(ps.get('outcome_chain'))}\n\n"
+        f"Intended ultimate impact: {ps.get('final_impact', '') or '(not stated)'}\n\n"
+        f"Opportunities the charity flagged:\n{_bullet_list(ps.get('charity_flagged_opportunities'))}\n\n"
+        f"Assumptions the charity makes:\n{_bullet_list(ps.get('charity_assumptions'))}"
+    )
+    system_message = (
+        "You are writing the \"Charity's Stated Work\" section of an evaluation: a neutral, faithful "
+        "summary of what the charity put forward, with NO evaluation, judgement or recommendations. "
+        "Use only the details provided. Write in clear objective third-person prose (a short paragraph, "
+        "then concise bullet points for activities, the outcome chain and intended impact). Do not add "
+        "opinions, do not assess feasibility, do not cite sources, and do not mention this tool."
+    )
+    result = llm.invoke([
+        SystemMessage(content=system_message),
+        HumanMessage(content=f"Write the section from these details:\n\n{details}"),
+    ])
+    return {"stated_work": _llm_text(result)}
 
-def finalize_report(state: ResearchGraphState):
-    evidence = state.get("evidence_section", "")
-    gaps = state.get("gaps_section", "")
-    opportunities = state.get("opportunities_section", "")
-    players = state.get("players_section", "")
-    topic = state["topic"]
-    research_plan = state.get("research_plan", {}) or {}
-    analysts = state.get("analysts") or []
 
-    # Collect every citation from all sections (matches the colored-span wrapper)
-    all_sources = set()
-    for section_text in [evidence, gaps, opportunities, players]:
-        found = re.findall(r'<span style="color: #[0-9a-fA-F]+;">\[(.*?)\]</span>', section_text)
-        for f in found:
-            # a single span may hold semicolon-separated sources — split them out
-            for one in f.split(";"):
-                all_sources.add(one.strip())
+def write_methodology(state: ResearchGraphState):
+    """Section 3 — plain-language description of how the analysis was carried out.
+    No code, function, variable or internal store names; data described by type."""
+    selected = _resolve_selected_stores(state.get("selected_stores"))
+    data_types = _describe_data_sources(selected)
+    text = (
+        "This evaluation took the single path the charity submitted and broke it down into its core "
+        "parts — the activities the charity plans to carry out, the outputs those produce, the chain of "
+        "outcomes expected to follow, and the ultimate impact it is aiming at.\n\n"
+        "Each part of the path was then checked, point by point, against the information available for "
+        f"India: {data_types}; alongside general knowledge of how comparable interventions tend to "
+        "perform. The same fixed checklist was applied to every path, so the evaluation consistently "
+        "covers the regulatory environment, the relevance and feasibility of the path, windows of "
+        "opportunity, challenges and risks, the team, and suggested follow-ups and contacts.\n\n"
+        "Where the available information did not cover a specific point, the evaluation says so plainly "
+        "rather than filling the gap with speculation. Findings are drawn from the sources above, and "
+        "specific claims are cited to the source they came from."
+    )
+    return {
+        "methodology": text,
+        "messages": [AIMessage(content="[PROGRESS:20] Recorded how the analysis was carried out.", name="System")],
+    }
 
-    sources_list = "\n".join(f"- {s}" for s in sorted(all_sources)) if all_sources else "- No sources cited"
 
-    primary_key = research_plan.get("primary", "")
-    if isinstance(primary_key, str) and primary_key in STORE_REGISTRY:
-        primary_label = STORE_REGISTRY[primary_key][1]
-    else:
-        primary_label = "Not specified"
+def assess_effectiveness(state: ResearchGraphState):
+    """Section 7a — effectiveness check from the model's trained knowledge (no vaults)."""
+    ps = state.get("path_spec") or {}
+    method = ps.get("method_descriptor") or "the approach the charity describes"
+    activities = _bullet_list(ps.get("activities"))
+    system_message = (
+        "You are writing subsection \"a. Effectiveness check\" of a theory-of-change evaluation for an "
+        "animal-advocacy charity operating in India. Draw ONLY on your own general/trained knowledge here "
+        "(not internal source vaults).\n\n"
+        "Assess whether the EFFECTIVENESS of this KIND of method is documented:\n"
+        "- If it is well documented, report what the broader evidence and literature generally say about "
+        "how effective this type of method tends to be, paying attention to the Indian context where possible.\n"
+        "- If it is NOT well documented, or you are unsure, say so plainly in one or two sentences rather "
+        "than inventing evidence.\n\n"
+        "Write in objective third person, concisely. Do not mention this tool or that this is 'trained "
+        "knowledge'. Do not use the internal-source citation format here, since this draws on general knowledge."
+    )
+    human = f"The charity's method, in brief: {method}\n\nIts activities:\n{activities}"
+    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content=human)])
+    return {"effectiveness_section": _llm_text(result)}
 
-    rationale_raw = research_plan.get("rationale", "No research plan rationale available.")
-    plan_rationale = rationale_raw if isinstance(rationale_raw, str) else "No research plan rationale available."
 
-    num_analysts = len(analysts) if analysts else research_plan.get("num_analysts", 0)
-    if analysts:
-        angle_lines = "\n".join(f"- **{a.role}** — {a.description}" for a in analysts)
-        angle_word = "angle" if num_analysts == 1 else "angles"
-        analyst_block = (
-            f"**Analyst angles chosen:** {num_analysts} {angle_word} were deployed to investigate this topic:\n\n"
-            f"{angle_lines}"
+regulatory_instructions = """You are writing the "Regulatory Environment" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
+
+Background context on India (use as orientation; cite specific claims to the research memos where they support them — do not cite this background itself):
+{india_macro}
+
+Write FOUR subsections, in this order, each starting with the exact markdown heading shown:
+### a. Legal
+### b. Political
+### c. Safety
+### d. Cultural attitudes towards foreign and local charities
+
+Anchor each subsection in its matching research memo below. Where a memo indicates nothing relevant was found (for example, the specific laws or licensing rules a nonprofit must follow are not covered), keep that subsection's heading and write one short, plain-language note that the tool needs more data on that point.
+
+{base_rules}
+
+{citation_rules}
+
+Research memos:
+{memos}"""
+
+
+def write_regulatory(state: ResearchGraphState):
+    memos_by_key = state.get("memos_by_key") or {}
+    blocks = "\n\n".join([
+        _format_memo_block(memos_by_key, "reg_legal", "Legal environment"),
+        _format_memo_block(memos_by_key, "reg_political", "Political environment"),
+        _format_memo_block(memos_by_key, "reg_safety", "Safety"),
+        _format_memo_block(memos_by_key, "reg_charity_attitudes", "Cultural attitudes towards foreign and local charities"),
+    ])
+    system_message = regulatory_instructions.format(
+        india_macro=INDIA_MACRO_STATEMENT,
+        base_rules=WRITER_BASE_RULES,
+        citation_rules=GLOBAL_CITATION_RULES,
+        memos=blocks,
+    )
+    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Regulatory Environment section.")])
+    return {"regulatory_section": _llm_text(result)}
+
+
+path_analysis_instructions = """You are writing the "Path Analysis" section of a theory-of-change evaluation for an animal-advocacy charity operating in India. This section checks how RELEVANT and workable the charity's path is against the realities below.
+
+The charity's proposed path:
+{path_brief}
+
+Write THREE subsections, in this order, each starting with the exact markdown heading shown:
+### i. Public engagement
+### ii. Tech feasibility
+### iii. Industry and government cooperation
+
+For each, use its matching research memo to judge how well the path fits that reality (e.g. how receptive the public is, whether the methods are technically feasible here, how willing industry and government are to cooperate — including their attitudes to working with nonprofits). Where a memo indicates nothing relevant was found, keep the subsection heading and write a short, plain-language note that the tool needs more data on that point.
+
+{base_rules}
+
+{citation_rules}
+
+Research memos:
+{memos}"""
+
+
+def write_path_analysis(state: ResearchGraphState):
+    memos_by_key = state.get("memos_by_key") or {}
+    blocks = "\n\n".join([
+        _format_memo_block(memos_by_key, "path_public", "Public engagement"),
+        _format_memo_block(memos_by_key, "path_tech", "Tech feasibility"),
+        _format_memo_block(memos_by_key, "path_cooperation", "Industry and government cooperation"),
+    ])
+    system_message = path_analysis_instructions.format(
+        path_brief=_path_brief(state.get("path_spec") or {}),
+        base_rules=WRITER_BASE_RULES,
+        citation_rules=GLOBAL_CITATION_RULES,
+        memos=blocks,
+    )
+    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Path Analysis section.")])
+    return {"path_analysis_section": _llm_text(result)}
+
+
+windows_instructions = """You are writing the "Windows of Opportunity" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
+
+Write TWO subsections, each starting with the exact markdown heading shown:
+### a. Opportunities flagged by the charity
+### b. Opportunities likely unspotted by the charity
+
+For (a): summarise the opportunities the charity itself put forward, listed here. If none were provided, keep the heading and say so plainly.
+Charity-flagged opportunities:
+{flagged}
+
+For (b): using the research memo below, identify time-sensitive openings the charity likely hasn't spotted — concrete levers an advocate could act on (a policy moment, a producer segment, a coalition, an attention spike). Be concrete about WHY each is time-sensitive. Ground each in the evidence; where the evidence shows no time-sensitive opening, say so rather than inventing urgency. If the memo indicates nothing relevant was found, keep the heading and write a short, plain-language note that the tool needs more data.
+
+[INTERNAL GUIDANCE — DO NOT name, quote, or reference this in your output. Let these field-experience lessons shape what you treat as a real, actionable opportunity:
+{field_lessons}]
+
+{base_rules}
+
+{citation_rules}
+
+Research memo (for unspotted opportunities):
+{memo}"""
+
+
+def write_windows(state: ResearchGraphState):
+    ps = state.get("path_spec") or {}
+    memos_by_key = state.get("memos_by_key") or {}
+    memo_block = _format_memo_block(memos_by_key, "windows_unspotted", "Opportunities the charity may not have spotted")
+    system_message = windows_instructions.format(
+        flagged=_bullet_list(ps.get("charity_flagged_opportunities")),
+        field_lessons=FIELD_LESSONS,
+        base_rules=WRITER_BASE_RULES,
+        citation_rules=GLOBAL_CITATION_RULES,
+        memo=memo_block,
+    )
+    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Windows of Opportunity section.")])
+    return {"windows_section": _llm_text(result)}
+
+
+challenges_instructions = """You are writing the cultural and landscape parts of the "Challenges, Risks & Effectiveness" section of a theory-of-change evaluation for an animal-advocacy charity operating in India. (The effectiveness subsection is written separately — do NOT write it here.)
+
+Write TWO subsections, each starting with the exact markdown heading shown:
+### b. Cultural challenges
+### c. Animal advocacy landscape challenges
+
+Use each subsection's matching research memo. Where a memo indicates nothing relevant was found, keep the heading and write a short, plain-language note that the tool needs more data on that point.
+
+[INTERNAL GUIDANCE — DO NOT name, quote, or reference this in your output. Let these field-experience lessons sharpen which challenges genuinely matter:
+{field_lessons}]
+
+{base_rules}
+
+{citation_rules}
+
+Research memos:
+{memos}"""
+
+
+def write_challenges(state: ResearchGraphState):
+    memos_by_key = state.get("memos_by_key") or {}
+    blocks = "\n\n".join([
+        _format_memo_block(memos_by_key, "challenges_cultural", "Cultural challenges"),
+        _format_memo_block(memos_by_key, "challenges_landscape", "Animal advocacy landscape challenges"),
+    ])
+    system_message = challenges_instructions.format(
+        field_lessons=FIELD_LESSONS,
+        base_rules=WRITER_BASE_RULES,
+        citation_rules=GLOBAL_CITATION_RULES,
+        memos=blocks,
+    )
+    result = llm_creative.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the cultural and advocacy-landscape challenge subsections.")])
+    return {"challenges_section": _llm_text(result)}
+
+
+team_instructions = """You are writing the "Team" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
+
+Write THREE subsections, each starting with the exact markdown heading shown:
+### a. Team capacity (talents and skills)
+### b. Track record and achievements
+### c. Existing players doing similar work on the ground
+
+For (a) and (b): use ONLY the team information the charity provided, below. If little or nothing was provided, keep the headings and state plainly that the tool needs more data on the team (this information isn't yet available to the tool). Do not invent team details.
+Team information from the charity:
+{team_info}
+
+For (c): using the research memo below, identify organisations, coalitions, government bodies or individuals already doing similar work in India and what the evidence says they are doing. Do not treat any of them as fixed obstacles — note where one could be a partner or an alternative ally. If carrying out this path would likely face significant regulatory hurdles, give existing players more weight (as potential partners or as groups that already navigate those hurdles). Where the memo indicates nothing relevant was found, keep the heading and write a short, plain-language note that the tool needs more data.
+
+{base_rules}
+
+{citation_rules}
+
+Research memo (existing players):
+{memo}"""
+
+
+def write_team(state: ResearchGraphState):
+    ps = state.get("path_spec") or {}
+    memos_by_key = state.get("memos_by_key") or {}
+    team_info = (ps.get("team_info") or "").strip() or "(no team information was provided in the path)"
+    memo_block = _format_memo_block(memos_by_key, "team_players", "Existing players doing similar work")
+    system_message = team_instructions.format(
+        team_info=team_info,
+        base_rules=WRITER_BASE_RULES,
+        citation_rules=GLOBAL_CITATION_RULES,
+        memo=memo_block,
+    )
+    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Team section.")])
+    return {"team_section": _llm_text(result)}
+
+
+def _sections_digest(state: ResearchGraphState, trim: int | None = 1200) -> str:
+    """A digest of the drafted analysis sections, for the derived writers."""
+    labelled = [
+        ("Regulatory Environment", state.get("regulatory_section", "")),
+        ("Path Analysis", state.get("path_analysis_section", "")),
+        ("Windows of Opportunity", state.get("windows_section", "")),
+        ("Effectiveness check", state.get("effectiveness_section", "")),
+        ("Challenges & Risks", state.get("challenges_section", "")),
+        ("Team", state.get("team_section", "")),
+    ]
+    parts = []
+    for title, txt in labelled:
+        txt = (txt or "").strip()
+        if not txt:
+            continue
+        if trim and len(txt) > trim:
+            txt = txt[:trim] + " …"
+        parts.append(f"## {title}\n{txt}")
+    return "\n\n".join(parts)
+
+
+def write_followups(state: ResearchGraphState):
+    """Section 10 — depends on the gaps surfaced across the analysis sections."""
+    ps = state.get("path_spec") or {}
+    system_message = (
+        "You are writing the \"Follow-Up Questions for the Charity\" section of an evaluation. Based on the "
+        "evaluation so far and the gaps it surfaced, write a concise, prioritised list of the most useful "
+        "questions to put to the charity — focused on its stated assumptions, any missing team or "
+        "track-record information, and anywhere the evaluation lacked the data to reach a view. Write the "
+        "questions as a numbered list, objective tone. Do not mention this tool or internal sources."
+    )
+    human = (
+        f"The charity's stated assumptions:\n{_bullet_list(ps.get('charity_assumptions'))}\n\n"
+        f"The evaluation so far:\n{_sections_digest(state)}"
+    )
+    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content=human)])
+    return {
+        "followups_section": _llm_text(result),
+        "messages": [AIMessage(content="[PROGRESS:80] Drafted follow-up questions and on-the-ground contacts.", name="System")],
+    }
+
+
+experts_instructions = """You are writing the "On-the-Ground Experts" section of a theory-of-change evaluation for work in India. Richer expert data will be added to this tool later; for now, work with what the provided files contain.
+
+From the files, surface real, named people and organisations who could be worth contacting — in particular the AUTHORS of the research sources and any ORGANISATIONS or officials named in the government information — who are relevant to the gaps and findings below. Only use names that actually appear in the files; do not invent people or organisations.
+
+For each expert or organisation, use this format:
+### <Name or organisation>
+- **Why selected:** tie back to a specific gap or finding from the evaluation.
+- **Questions to ask:** 2-3 concrete questions.
+- **Contact details:** any contact details present in the files; if none are available, say plainly that contact details aren't available to the tool yet.
+
+If the files surface no relevant names at all, keep the section heading and write a short, plain-language note that the tool needs more data to recommend specific experts.
+
+{base_rules}
+
+{citation_rules}
+
+Gaps and findings to tie experts to:
+{gaps_digest}"""
+
+
+def write_experts(state: ResearchGraphState):
+    """Section 11 — gap-dependent retrieval for named experts/organisations to contact."""
+    selected = _resolve_selected_stores(state.get("selected_stores"))
+    store_keys = [k for k in ["onground_advocate", "local_academic", "goi_pib", "foreign_academic"] if k in selected] or selected
+    active_store_ids = [STORE_REGISTRY[k][0] for k in store_keys]
+    gaps_digest = _sections_digest(state)
+
+    system_message = experts_instructions.format(
+        base_rules=WRITER_BASE_RULES,
+        citation_rules=GLOBAL_CITATION_RULES,
+        gaps_digest=gaps_digest or "(no prior findings available)",
+    )
+    prompt = (
+        "Identify named authors, experts, organisations or officials in the files who are relevant to the "
+        "gaps and findings provided, with any contact details that appear in the files. Use only names that "
+        "actually appear in the files."
+    )
+    model_config = types.GenerateContentConfig(
+        system_instruction=system_message,
+        tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=active_store_ids))],
+        temperature=0.0,
+    )
+
+    text = ""
+    for try_count in range(3):
+        try:
+            response = gemini_client.models.generate_content(
+                model="gemini-3-flash-preview",
+                contents=prompt,
+                config=model_config,
+            )
+            text = (response.text or "").strip()
+            break
+        except errors.ServerError as e:
+            print(f"[write_experts] server glitch on try {try_count + 1}: {e}")
+            if try_count < 2:
+                time.sleep(3)
+        except Exception as e:
+            print(f"[write_experts] unexpected error: {e}")
+            break
+
+    if not text:
+        text = (
+            "There isn't enough information in the available sources yet to recommend specific on-the-ground "
+            "experts to contact. More data will be added to the tool to support this."
         )
-    else:
-        analyst_block = "**Analyst angles chosen:** No analyst angles were recorded for this run."
+    return {"experts_section": text}
 
-    final_report_str = f"""# Strategic Briefing: {topic}
 
-## How This Research Was Approached
+def write_evaluation_summary(state: ResearchGraphState):
+    """Section 2 — written LAST; leans on everything else."""
+    system_message = (
+        "You are writing the \"Evaluation Summary\" — a concise wrap-up of the evaluation's findings for "
+        "this single path. Pull together the most important points from the sections below: the regulatory "
+        "picture, how relevant and feasible the path looks, the main opportunities, the main challenges and "
+        "what is known about the method's effectiveness, the team picture, and the biggest open questions. "
+        "Be balanced and concrete, a few short paragraphs. Do not introduce new claims or citations that are "
+        "not already in the sections. Do not mention this tool or internal sources."
+    )
+    human = f"The full evaluation:\n\n{_sections_digest(state, trim=None)}"
+    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content=human)])
+    return {
+        "evaluation_summary": _llm_text(result),
+        "messages": [AIMessage(content="[PROGRESS:90] Wrote the evaluation summary.", name="System")],
+    }
 
-**Primary source store:** {primary_label}
 
-{plan_rationale}
+# ---------------------------------------------------------------------------
+# 5d. Finalize Report (fixed 11-section layout)
+# ---------------------------------------------------------------------------
+def finalize_report(state: ResearchGraphState):
+    stated_work = state.get("stated_work", "")
+    summary = state.get("evaluation_summary", "")
+    methodology = state.get("methodology", "")
+    regulatory = state.get("regulatory_section", "")
+    path_analysis = state.get("path_analysis_section", "")
+    windows = state.get("windows_section", "")
+    effectiveness = state.get("effectiveness_section", "")
+    challenges = state.get("challenges_section", "")
+    team = state.get("team_section", "")
+    followups = state.get("followups_section", "")
+    experts = state.get("experts_section", "")
 
-{analyst_block}
+    # Collect every citation across the cited sections (matches the colored-span wrapper).
+    all_sources = set()
+    for section_text in [regulatory, path_analysis, windows, challenges, team, experts]:
+        for f in re.findall(r'<span style="color: #[0-9a-fA-F]+;">\[(.*?)\]</span>', section_text or ""):
+            for one in f.split(";"):
+                if one.strip():
+                    all_sources.add(one.strip())
+    sources_list = "\n".join(f"- {s}" for s in sorted(all_sources)) if all_sources else "- No sources were cited."
+
+    final_report_str = f"""# Theory of Change Evaluation
+
+## 1. Charity's Stated Work
+
+{stated_work}
 
 ---
 
-## What the Evidence Says
+## 2. Evaluation Summary
 
-{evidence}
-
----
-
-## Gaps in the Evidence
-
-{gaps}
+{summary}
 
 ---
 
-## Windows of Opportunity
+## 3. Methodology
 
-{opportunities}
-
----
-
-## Current Players
-
-{players}
+{methodology}
 
 ---
 
-## Sources
+## 4. Regulatory Environment
 
-{sources_list}"""
+{regulatory}
+
+---
+
+## 5. Path Analysis
+
+{path_analysis}
+
+---
+
+## 6. Windows of Opportunity
+
+{windows}
+
+---
+
+## 7. Challenges, Risks & Effectiveness
+
+### a. Effectiveness check
+
+{effectiveness}
+
+{challenges}
+
+---
+
+## 8. Team
+
+{team}
+
+---
+
+## 9. Sources Cited
+
+{sources_list}
+
+---
+
+## 10. Follow-Up Questions for the Charity
+
+{followups}
+
+---
+
+## 11. On-the-Ground Experts
+
+{experts}"""
 
     return {
         "final_report": final_report_str,
         "messages": [AIMessage(
-            content=f"[PROGRESS:100] Briefing complete.\n\n{final_report_str}",
-            name="System"
+            content=f"[PROGRESS:100] Evaluation complete.\n\n{final_report_str}",
+            name="System",
         )]
     }
 
@@ -1110,32 +1254,59 @@ def finalize_report(state: ResearchGraphState):
 # ---------------------------------------------------------------------------
 builder = StateGraph(ResearchGraphState)
 builder.add_node("ingest_document", ingest_document)
-builder.add_node("plan_research", plan_research)
-builder.add_node("create_analysts", create_analysts)
-builder.add_node("conduct_interview", interview_builder.compile())
+builder.add_node("normalise_path", normalise_path)
+builder.add_node("dispatch_dimensions", dispatch_dimensions)
+builder.add_node("gather_evidence", gather_evidence)
 builder.add_node("collect_sections", collect_sections)
-builder.add_node("abort_report", abort_report)
 builder.add_node("prepare_writing", prepare_writing)
-builder.add_node("write_evidence", write_evidence)
-builder.add_node("write_gaps", write_gaps)
-builder.add_node("write_opportunities", write_opportunities)
-builder.add_node("write_players", write_players)
+builder.add_node("write_stated_work", write_stated_work)
+builder.add_node("write_methodology", write_methodology)
+builder.add_node("assess_effectiveness", assess_effectiveness)
+builder.add_node("write_regulatory", write_regulatory)
+builder.add_node("write_path_analysis", write_path_analysis)
+builder.add_node("write_windows", write_windows)
+builder.add_node("write_challenges", write_challenges)
+builder.add_node("write_team", write_team)
+builder.add_node("write_followups", write_followups)
+builder.add_node("write_experts", write_experts)
+builder.add_node("write_evaluation_summary", write_evaluation_summary)
 builder.add_node("finalize_report", finalize_report)
 
+# Entry: read the file, then normalise the path into one representation.
 builder.add_edge(START, "ingest_document")
-builder.add_edge("ingest_document", "plan_research")
-builder.add_edge("plan_research", "create_analysts")
-builder.add_conditional_edges("create_analysts", initiate_all_interviews, ["conduct_interview"])
+builder.add_edge("ingest_document", "normalise_path")
 
-builder.add_edge("conduct_interview", "collect_sections")
-builder.add_conditional_edges("collect_sections", check_knowledge, ["prepare_writing", "abort_report"])
+# Front fan-out: path-only / process-only / trained-only nodes run alongside
+# the vault retrievals — none of them depend on the gathered evidence.
+builder.add_edge("normalise_path", "write_stated_work")
+builder.add_edge("normalise_path", "write_methodology")
+builder.add_edge("normalise_path", "assess_effectiveness")
+builder.add_edge("normalise_path", "dispatch_dimensions")
 
-builder.add_edge("prepare_writing", "write_evidence")
-builder.add_edge("prepare_writing", "write_gaps")
-builder.add_edge("prepare_writing", "write_opportunities")
-builder.add_edge("prepare_writing", "write_players")
-builder.add_edge(["write_evidence", "write_gaps", "write_opportunities", "write_players"], "finalize_report")
+# Vault retrievals fan out per dimension, then join.
+builder.add_conditional_edges("dispatch_dimensions", route_to_dimensions, ["gather_evidence"])
+builder.add_edge("gather_evidence", "collect_sections")
+builder.add_edge("collect_sections", "prepare_writing")
+
+# Main section writers run in parallel off the bucketed memos.
+builder.add_edge("prepare_writing", "write_regulatory")
+builder.add_edge("prepare_writing", "write_path_analysis")
+builder.add_edge("prepare_writing", "write_windows")
+builder.add_edge("prepare_writing", "write_challenges")
+builder.add_edge("prepare_writing", "write_team")
+
+# Follow-ups and experts depend on the gaps surfaced by the five main writers.
+_MAIN_WRITERS = ["write_regulatory", "write_path_analysis", "write_windows", "write_challenges", "write_team"]
+builder.add_edge(_MAIN_WRITERS, "write_followups")
+builder.add_edge(_MAIN_WRITERS, "write_experts")
+
+# The summary is written last — it waits on everything (the derived writers plus
+# the front fan-out branches).
+builder.add_edge(
+    ["write_followups", "write_experts", "write_stated_work", "write_methodology", "assess_effectiveness"],
+    "write_evaluation_summary",
+)
+builder.add_edge("write_evaluation_summary", "finalize_report")
 builder.add_edge("finalize_report", END)
-builder.add_edge("abort_report", END)
 
 graph = builder.compile()
