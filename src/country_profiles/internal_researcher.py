@@ -140,7 +140,6 @@ class ResearchGraphState(TypedDict):
     regulatory_section: str
     path_analysis_section: str
     windows_section: str
-    effectiveness_section: str
     challenges_section: str
     team_section: str
     followups_section: str
@@ -535,6 +534,12 @@ EVAL_DIMENSIONS = [
         "stores": ["onground_advocate", "local_academic", "goi_pib"],
         "brief": "Organisations, coalitions, government bodies or individuals already doing work similar to this charity's path in India, and what the evidence says they are currently doing.",
     },
+    {
+        "key": "effectiveness",
+        "label": "Effectiveness of the charity's stated actions",
+        "stores": ["foreign_academic", "local_academic", "onground_advocate", "goi_pib"],
+        "brief": "Evidence in the data that BACKS UP or OBSTRUCTS the effectiveness of the charity's specific stated actions. For each stated action or method, find whether the sources show it tends to work or fail (in India where possible). Treat supporting and contradicting evidence separately, and actively surface MULTIPLE corroborating sources for each point where they exist.",
+    },
 ]
 
 
@@ -598,6 +603,7 @@ CRITICAL RULES:
 {pib_rule}
 6. ONE-CLAIM-ONE-SOURCE BY DEFAULT. A citation must support the specific claim it sits next to. Place citations mid-sentence at the point each source's contribution applies.
 7. WHEN YOU COMBINE SOURCES, SAY SO. If a claim genuinely combines multiple sources into a mechanism or link no single source states, flag it as synthesis ("taken together, these sources suggest…") and cite ALL contributing sources.
+8. CORROBORATION IS VALUABLE. Where several sources support (or several contradict) the same point, surface them together and cite all of them — multiple corroborating citations strengthen a finding. Never invent corroboration the files don't contain.
 
 {GLOBAL_CITATION_RULES}
 """
@@ -756,6 +762,51 @@ def _llm_text(result) -> str:
     return str(text)
 
 
+# Structured-output schemas for the multi-subsection writers. Each field is the
+# BODY of one subsection (no heading) — the canonical Title-Case headings are
+# injected deterministically by _render_subsections so they can never drift or
+# duplicate.
+class RegulatoryContent(BaseModel):
+    legal: str = Field(default="", description="Body for the Legal subsection. No heading.")
+    political: str = Field(default="", description="Body for the Political subsection. No heading.")
+    safety: str = Field(default="", description="Body for the Safety subsection. No heading.")
+    charity_attitudes: str = Field(default="", description="Body on cultural attitudes towards foreign/local charities. No heading.")
+
+
+class PathAnalysisContent(BaseModel):
+    public_engagement: str = Field(default="", description="Body for the Public Engagement subsection. No heading.")
+    tech_feasibility: str = Field(default="", description="Body for the Tech Feasibility subsection. No heading.")
+    industry_government_cooperation: str = Field(default="", description="Body for the Industry and Government Cooperation subsection. No heading.")
+
+
+class WindowsContent(BaseModel):
+    flagged: str = Field(default="", description="Body summarising opportunities the charity itself flagged. No heading.")
+    unspotted: str = Field(default="", description="Body for opportunities the charity likely hasn't spotted. No heading.")
+
+
+class ChallengesContent(BaseModel):
+    effectiveness: str = Field(default="", description="Body for the Effectiveness Check: action-by-action, every claim cited, no summary preamble. No heading.")
+    cultural: str = Field(default="", description="Body for the Cultural Challenges subsection. No heading.")
+    landscape: str = Field(default="", description="Body for the Animal Advocacy Landscape Challenges subsection. No heading.")
+
+
+class TeamContent(BaseModel):
+    capacity: str = Field(default="", description="Body for the Team Capacity subsection. No heading.")
+    track_record: str = Field(default="", description="Body for the Track Record and Achievements subsection. No heading.")
+    existing_players: str = Field(default="", description="Body for the Existing Players Doing Similar Work subsection. No heading.")
+
+
+def _render_subsections(pairs: list[tuple[str, str]]) -> str:
+    """Inject canonical '### a. …' headings around body-only fields."""
+    blocks = []
+    for heading, body in pairs:
+        body = (body or "").strip() or (
+            "There isn't enough information in the available sources to speak to this point yet; more data is needed."
+        )
+        blocks.append(f"### {heading}\n\n{body}")
+    return "\n\n".join(blocks)
+
+
 # ---------------------------------------------------------------------------
 # 5c. Section writers
 # ---------------------------------------------------------------------------
@@ -776,7 +827,8 @@ def write_stated_work(state: ResearchGraphState):
         "summary of what the charity put forward, with NO evaluation, judgement or recommendations. "
         "Use only the details provided. Write in clear objective third-person prose (a short paragraph, "
         "then concise bullet points for activities, the outcome chain and intended impact). Do not add "
-        "opinions, do not assess feasibility, do not cite sources, and do not mention this tool."
+        "opinions, do not assess feasibility, do not cite sources, and do not mention this tool. "
+        "Do not include a section heading or title; start directly with the content."
     )
     result = llm.invoke([
         SystemMessage(content=system_message),
@@ -809,40 +861,18 @@ def write_methodology(state: ResearchGraphState):
     }
 
 
-def assess_effectiveness(state: ResearchGraphState):
-    """Section 7a — effectiveness check from the model's trained knowledge (no vaults)."""
-    ps = state.get("path_spec") or {}
-    method = ps.get("method_descriptor") or "the approach the charity describes"
-    activities = _bullet_list(ps.get("activities"))
-    system_message = (
-        "You are writing subsection \"a. Effectiveness check\" of a theory-of-change evaluation for an "
-        "animal-advocacy charity operating in India. Draw ONLY on your own general/trained knowledge here "
-        "(not internal source vaults).\n\n"
-        "Assess whether the EFFECTIVENESS of this KIND of method is documented:\n"
-        "- If it is well documented, report what the broader evidence and literature generally say about "
-        "how effective this type of method tends to be, paying attention to the Indian context where possible.\n"
-        "- If it is NOT well documented, or you are unsure, say so plainly in one or two sentences rather "
-        "than inventing evidence.\n\n"
-        "Write in objective third person, concisely. Do not mention this tool or that this is 'trained "
-        "knowledge'. Do not use the internal-source citation format here, since this draws on general knowledge."
-    )
-    human = f"The charity's method, in brief: {method}\n\nIts activities:\n{activities}"
-    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content=human)])
-    return {"effectiveness_section": _llm_text(result)}
-
-
 regulatory_instructions = """You are writing the "Regulatory Environment" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
 
 Background context on India (use as orientation; cite specific claims to the research memos where they support them — do not cite this background itself):
 {india_macro}
 
-Write FOUR subsections, in this order, each starting with the exact markdown heading shown:
-### a. Legal
-### b. Political
-### c. Safety
-### d. Cultural attitudes towards foreign and local charities
+Provide the BODY TEXT for four subsections, anchored in their matching research memos below:
+- legal — the laws, regulations and compliance requirements a nonprofit doing this work would face.
+- political — the political climate relevant to the path.
+- safety — safety considerations for people carrying out this work.
+- charity_attitudes — cultural attitudes towards foreign and local charities.
 
-Anchor each subsection in its matching research memo below. Where a memo indicates nothing relevant was found (for example, the specific laws or licensing rules a nonprofit must follow are not covered), keep that subsection's heading and write one short, plain-language note that the tool needs more data on that point.
+Do NOT include any markdown headings in your fields — the headings are added automatically. For any subsection whose memo indicates nothing relevant was found (for example, the specific laws or licensing rules a nonprofit must follow are not covered), write one short, plain-language note that the tool needs more data on that point.
 
 {base_rules}
 
@@ -866,8 +896,15 @@ def write_regulatory(state: ResearchGraphState):
         citation_rules=GLOBAL_CITATION_RULES,
         memos=blocks,
     )
-    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Regulatory Environment section.")])
-    return {"regulatory_section": _llm_text(result)}
+    res = cast(RegulatoryContent, llm.with_structured_output(RegulatoryContent).invoke(
+        [SystemMessage(content=system_message), HumanMessage(content="Write the four subsection bodies.")]
+    ))
+    return {"regulatory_section": _render_subsections([
+        ("a. Legal", res.legal),
+        ("b. Political", res.political),
+        ("c. Safety", res.safety),
+        ("d. Cultural Attitudes Towards Foreign and Local Charities", res.charity_attitudes),
+    ])}
 
 
 path_analysis_instructions = """You are writing the "Path Analysis" section of a theory-of-change evaluation for an animal-advocacy charity operating in India. This section checks how RELEVANT and workable the charity's path is against the realities below.
@@ -875,12 +912,12 @@ path_analysis_instructions = """You are writing the "Path Analysis" section of a
 The charity's proposed path:
 {path_brief}
 
-Write THREE subsections, in this order, each starting with the exact markdown heading shown:
-### i. Public engagement
-### ii. Tech feasibility
-### iii. Industry and government cooperation
+Provide the BODY TEXT for three subsections, each judged against its matching research memo:
+- public_engagement — how receptive the public is (incl. public consciousness of animal welfare).
+- tech_feasibility — whether the methods the path relies on are technically feasible here.
+- industry_government_cooperation — how willing industry and government bodies are to cooperate, incl. their attitudes to working with nonprofits.
 
-For each, use its matching research memo to judge how well the path fits that reality (e.g. how receptive the public is, whether the methods are technically feasible here, how willing industry and government are to cooperate — including their attitudes to working with nonprofits). Where a memo indicates nothing relevant was found, keep the subsection heading and write a short, plain-language note that the tool needs more data on that point.
+Do NOT include any markdown headings in your fields — the headings are added automatically. For any subsection whose memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data on that point.
 
 {base_rules}
 
@@ -903,21 +940,23 @@ def write_path_analysis(state: ResearchGraphState):
         citation_rules=GLOBAL_CITATION_RULES,
         memos=blocks,
     )
-    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Path Analysis section.")])
-    return {"path_analysis_section": _llm_text(result)}
+    res = cast(PathAnalysisContent, llm.with_structured_output(PathAnalysisContent).invoke(
+        [SystemMessage(content=system_message), HumanMessage(content="Write the three subsection bodies.")]
+    ))
+    return {"path_analysis_section": _render_subsections([
+        ("a. Public Engagement", res.public_engagement),
+        ("b. Tech Feasibility", res.tech_feasibility),
+        ("c. Industry and Government Cooperation", res.industry_government_cooperation),
+    ])}
 
 
 windows_instructions = """You are writing the "Windows of Opportunity" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
 
-Write TWO subsections, each starting with the exact markdown heading shown:
-### a. Opportunities flagged by the charity
-### b. Opportunities likely unspotted by the charity
-
-For (a): summarise the opportunities the charity itself put forward, listed here. If none were provided, keep the heading and say so plainly.
-Charity-flagged opportunities:
-{flagged}
-
-For (b): using the research memo below, identify time-sensitive openings the charity likely hasn't spotted — concrete levers an advocate could act on (a policy moment, a producer segment, a coalition, an attention spike). Be concrete about WHY each is time-sensitive. Ground each in the evidence; where the evidence shows no time-sensitive opening, say so rather than inventing urgency. If the memo indicates nothing relevant was found, keep the heading and write a short, plain-language note that the tool needs more data.
+Provide the BODY TEXT for two subsections (no markdown headings — they are added automatically):
+- flagged — summarise the opportunities the charity itself put forward, listed here. If none were provided, say so plainly.
+  Charity-flagged opportunities:
+  {flagged}
+- unspotted — using the research memo below, identify time-sensitive openings the charity likely hasn't spotted: concrete levers an advocate could act on (a policy moment, a producer segment, a coalition, an attention spike). Be concrete about WHY each is time-sensitive. Ground each in the evidence; where the evidence shows no time-sensitive opening, say so rather than inventing urgency. If the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data.
 
 [INTERNAL GUIDANCE — DO NOT name, quote, or reference this in your output. Let these field-experience lessons shape what you treat as a real, actionable opportunity:
 {field_lessons}]
@@ -941,17 +980,26 @@ def write_windows(state: ResearchGraphState):
         citation_rules=GLOBAL_CITATION_RULES,
         memo=memo_block,
     )
-    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Windows of Opportunity section.")])
-    return {"windows_section": _llm_text(result)}
+    res = cast(WindowsContent, llm.with_structured_output(WindowsContent).invoke(
+        [SystemMessage(content=system_message), HumanMessage(content="Write the two subsection bodies.")]
+    ))
+    return {"windows_section": _render_subsections([
+        ("a. Opportunities Flagged by the Charity", res.flagged),
+        ("b. Opportunities Likely Unspotted by the Charity", res.unspotted),
+    ])}
 
 
-challenges_instructions = """You are writing the cultural and landscape parts of the "Challenges, Risks & Effectiveness" section of a theory-of-change evaluation for an animal-advocacy charity operating in India. (The effectiveness subsection is written separately — do NOT write it here.)
+challenges_instructions = """You are writing the "Challenges, Risks & Effectiveness" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
 
-Write TWO subsections, each starting with the exact markdown heading shown:
-### b. Cultural challenges
-### c. Animal advocacy landscape challenges
+The charity's proposed path:
+{path_brief}
 
-Use each subsection's matching research memo. Where a memo indicates nothing relevant was found, keep the heading and write a short, plain-language note that the tool needs more data on that point.
+Provide the BODY TEXT for three subsections (no markdown headings — they are added automatically):
+- effectiveness — Check the charity's stated actions against the evidence. Go ACTION BY ACTION: for each action, state whether the data BACKS IT UP or OBSTRUCTS its effectiveness, and cite every claim. Do NOT open with a general summary paragraph. Favour MULTIPLE corroborating citations where the data contains them. Where the data is silent on an action, write a short, plain-language note that the tool needs more data — do NOT fall back on uncited general knowledge.
+- cultural — cultural challenges that could obstruct the path, from its memo.
+- landscape — challenges in the animal-advocacy landscape, from its memo.
+
+For cultural and landscape, where a memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data on that point.
 
 [INTERNAL GUIDANCE — DO NOT name, quote, or reference this in your output. Let these field-experience lessons sharpen which challenges genuinely matter:
 {field_lessons}]
@@ -967,31 +1015,39 @@ Research memos:
 def write_challenges(state: ResearchGraphState):
     memos_by_key = state.get("memos_by_key") or {}
     blocks = "\n\n".join([
+        _format_memo_block(memos_by_key, "effectiveness", "Effectiveness of the charity's stated actions"),
         _format_memo_block(memos_by_key, "challenges_cultural", "Cultural challenges"),
         _format_memo_block(memos_by_key, "challenges_landscape", "Animal advocacy landscape challenges"),
     ])
     system_message = challenges_instructions.format(
+        path_brief=_path_brief(state.get("path_spec") or {}),
         field_lessons=FIELD_LESSONS,
         base_rules=WRITER_BASE_RULES,
         citation_rules=GLOBAL_CITATION_RULES,
         memos=blocks,
     )
-    result = llm_creative.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the cultural and advocacy-landscape challenge subsections.")])
-    return {"challenges_section": _llm_text(result)}
+    res = cast(ChallengesContent, llm.with_structured_output(ChallengesContent).invoke(
+        [SystemMessage(content=system_message), HumanMessage(content="Write the three subsection bodies.")]
+    ))
+    return {"challenges_section": _render_subsections([
+        ("a. Effectiveness Check", res.effectiveness),
+        ("b. Cultural Challenges", res.cultural),
+        ("c. Animal Advocacy Landscape Challenges", res.landscape),
+    ])}
 
 
 team_instructions = """You are writing the "Team" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
 
-Write THREE subsections, each starting with the exact markdown heading shown:
-### a. Team capacity (talents and skills)
-### b. Track record and achievements
-### c. Existing players doing similar work on the ground
+Provide the BODY TEXT for three subsections (no markdown headings — they are added automatically):
+- capacity — the team's capacity, talents and skills, using ONLY the team information provided below.
+- track_record — the team's track record and achievements, using ONLY the team information provided below.
+- existing_players — using the research memo below, organisations, coalitions, government bodies or individuals already doing similar work in India and what the evidence says they are doing.
 
-For (a) and (b): use ONLY the team information the charity provided, below. If little or nothing was provided, keep the headings and state plainly that the tool needs more data on the team (this information isn't yet available to the tool). Do not invent team details.
+For capacity and track_record: if little or nothing was provided, state plainly that the tool needs more data on the team (this information isn't yet available to the tool). Do not invent team details.
 Team information from the charity:
 {team_info}
 
-For (c): using the research memo below, identify organisations, coalitions, government bodies or individuals already doing similar work in India and what the evidence says they are doing. Do not treat any of them as fixed obstacles — note where one could be a partner or an alternative ally. If carrying out this path would likely face significant regulatory hurdles, give existing players more weight (as potential partners or as groups that already navigate those hurdles). Where the memo indicates nothing relevant was found, keep the heading and write a short, plain-language note that the tool needs more data.
+For existing_players: do not treat any player as a fixed obstacle — note where one could be a partner or an alternative ally. If carrying out this path would likely face significant regulatory hurdles, give existing players more weight (as partners or as groups that already navigate those hurdles). Where the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data.
 
 {base_rules}
 
@@ -1012,8 +1068,14 @@ def write_team(state: ResearchGraphState):
         citation_rules=GLOBAL_CITATION_RULES,
         memo=memo_block,
     )
-    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content="Write the Team section.")])
-    return {"team_section": _llm_text(result)}
+    res = cast(TeamContent, llm.with_structured_output(TeamContent).invoke(
+        [SystemMessage(content=system_message), HumanMessage(content="Write the three subsection bodies.")]
+    ))
+    return {"team_section": _render_subsections([
+        ("a. Team Capacity", res.capacity),
+        ("b. Track Record and Achievements", res.track_record),
+        ("c. Existing Players Doing Similar Work", res.existing_players),
+    ])}
 
 
 def _sections_digest(state: ResearchGraphState, trim: int | None = 1200) -> str:
@@ -1022,8 +1084,7 @@ def _sections_digest(state: ResearchGraphState, trim: int | None = 1200) -> str:
         ("Regulatory Environment", state.get("regulatory_section", "")),
         ("Path Analysis", state.get("path_analysis_section", "")),
         ("Windows of Opportunity", state.get("windows_section", "")),
-        ("Effectiveness check", state.get("effectiveness_section", "")),
-        ("Challenges & Risks", state.get("challenges_section", "")),
+        ("Challenges, Risks & Effectiveness", state.get("challenges_section", "")),
         ("Team", state.get("team_section", "")),
     ]
     parts = []
@@ -1045,7 +1106,8 @@ def write_followups(state: ResearchGraphState):
         "evaluation so far and the gaps it surfaced, write a concise, prioritised list of the most useful "
         "questions to put to the charity — focused on its stated assumptions, any missing team or "
         "track-record information, and anywhere the evaluation lacked the data to reach a view. Write the "
-        "questions as a numbered list, objective tone. Do not mention this tool or internal sources."
+        "questions as a numbered list, objective tone. Do not mention this tool or internal sources. "
+        "Do not include a section heading; start directly with the questions."
     )
     human = (
         f"The charity's stated assumptions:\n{_bullet_list(ps.get('charity_assumptions'))}\n\n"
@@ -1062,13 +1124,13 @@ experts_instructions = """You are writing the "On-the-Ground Experts" section of
 
 From the files, surface real, named people and organisations who could be worth contacting — in particular the AUTHORS of the research sources and any ORGANISATIONS or officials named in the government information — who are relevant to the gaps and findings below. Only use names that actually appear in the files; do not invent people or organisations.
 
-For each expert or organisation, use this format:
-### <Name or organisation>
-- **Why selected:** tie back to a specific gap or finding from the evaluation.
-- **Questions to ask:** 2-3 concrete questions.
-- **Contact details:** any contact details present in the files; if none are available, say plainly that contact details aren't available to the tool yet.
+Do not include a top-level section heading; start directly with the experts. For each expert or organisation, use this format:
+### <Name or Organisation>
+- **Why Selected:** tie back to a specific gap or finding from the evaluation.
+- **Questions to Ask:** 2-3 concrete questions.
+- **Contact Details:** any contact details present in the files; if none are available, say plainly that contact details aren't available to the tool yet.
 
-If the files surface no relevant names at all, keep the section heading and write a short, plain-language note that the tool needs more data to recommend specific experts.
+If the files surface no relevant names at all, write a short, plain-language note that the tool needs more data to recommend specific experts.
 
 {base_rules}
 
@@ -1135,7 +1197,8 @@ def write_evaluation_summary(state: ResearchGraphState):
         "picture, how relevant and feasible the path looks, the main opportunities, the main challenges and "
         "what is known about the method's effectiveness, the team picture, and the biggest open questions. "
         "Be balanced and concrete, a few short paragraphs. Do not introduce new claims or citations that are "
-        "not already in the sections. Do not mention this tool or internal sources."
+        "not already in the sections. Do not mention this tool or internal sources. "
+        "Do not include a section heading; start directly with the summary."
     )
     human = f"The full evaluation:\n\n{_sections_digest(state, trim=None)}"
     result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content=human)])
@@ -1155,7 +1218,6 @@ def finalize_report(state: ResearchGraphState):
     regulatory = state.get("regulatory_section", "")
     path_analysis = state.get("path_analysis_section", "")
     windows = state.get("windows_section", "")
-    effectiveness = state.get("effectiveness_section", "")
     challenges = state.get("challenges_section", "")
     team = state.get("team_section", "")
     followups = state.get("followups_section", "")
@@ -1184,7 +1246,7 @@ def finalize_report(state: ResearchGraphState):
 
 ---
 
-## 3. Methodology
+## 3. Methodology of This Evaluation
 
 {methodology}
 
@@ -1210,10 +1272,6 @@ def finalize_report(state: ResearchGraphState):
 
 ## 7. Challenges, Risks & Effectiveness
 
-### a. Effectiveness check
-
-{effectiveness}
-
 {challenges}
 
 ---
@@ -1224,21 +1282,21 @@ def finalize_report(state: ResearchGraphState):
 
 ---
 
-## 9. Sources Cited
-
-{sources_list}
-
----
-
-## 10. Follow-Up Questions for the Charity
+## 9. Follow-Up Questions for the Charity
 
 {followups}
 
 ---
 
-## 11. On-the-Ground Experts
+## 10. On-the-Ground Experts
 
-{experts}"""
+{experts}
+
+---
+
+## 11. Sources Cited
+
+{sources_list}"""
 
     return {
         "final_report": final_report_str,
@@ -1261,7 +1319,6 @@ builder.add_node("collect_sections", collect_sections)
 builder.add_node("prepare_writing", prepare_writing)
 builder.add_node("write_stated_work", write_stated_work)
 builder.add_node("write_methodology", write_methodology)
-builder.add_node("assess_effectiveness", assess_effectiveness)
 builder.add_node("write_regulatory", write_regulatory)
 builder.add_node("write_path_analysis", write_path_analysis)
 builder.add_node("write_windows", write_windows)
@@ -1280,7 +1337,6 @@ builder.add_edge("ingest_document", "normalise_path")
 # the vault retrievals — none of them depend on the gathered evidence.
 builder.add_edge("normalise_path", "write_stated_work")
 builder.add_edge("normalise_path", "write_methodology")
-builder.add_edge("normalise_path", "assess_effectiveness")
 builder.add_edge("normalise_path", "dispatch_dimensions")
 
 # Vault retrievals fan out per dimension, then join.
@@ -1303,7 +1359,7 @@ builder.add_edge(_MAIN_WRITERS, "write_experts")
 # The summary is written last — it waits on everything (the derived writers plus
 # the front fan-out branches).
 builder.add_edge(
-    ["write_followups", "write_experts", "write_stated_work", "write_methodology", "assess_effectiveness"],
+    ["write_followups", "write_experts", "write_stated_work", "write_methodology"],
     "write_evaluation_summary",
 )
 builder.add_edge("write_evaluation_summary", "finalize_report")
