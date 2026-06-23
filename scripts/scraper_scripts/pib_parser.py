@@ -53,50 +53,56 @@ def process_all_files():
         return
         
     print(f"Found {len(html_files)} files. Starting extraction...")
-    
-    # We will process them year by year
-    years_data = {}
-    
-    seen_prids_by_year = {}  # year -> set of PRIDs already kept
+
+    # One output file per month. The HTML index is already per-month
+    # (pib_fisheries_YYYY_MM.html), so each input maps to one monthly markdown
+    # file. Per-month files are immutable once settled, which keeps uploads to
+    # the File Search store append-only (see config.is_settled_month).
+    months_data = {}          # "YYYY_MM" -> list of releases
+    seen_prids_by_month = {}  # "YYYY_MM" -> set of PRIDs already kept
 
     for filepath in html_files:
         filename = filepath.stem
         # filename format is pib_fisheries_YYYY_MM
         parts = filename.split('_')
         if len(parts) == 4:
-            year = parts[2]
-            
+            year, month = parts[2], parts[3]
+            key = f"{year}_{month}"
+
             releases = parse_pib_html(filepath)
-            
-            if year not in years_data:
-                years_data[year] = []
-                seen_prids_by_year[year] = set()
-            
+
+            months_data.setdefault(key, [])
+            seen_prids_by_month.setdefault(key, set())
+
             for release in releases:
                 prid_match = re.search(r"PRID=(\d+)", release["url"])
                 prid = prid_match.group(1) if prid_match else release["url"]
-                if prid in seen_prids_by_year[year]:
+                if prid in seen_prids_by_month[key]:
                     continue
-                seen_prids_by_year[year].add(prid)
-                years_data[year].append(release)
-    
+                seen_prids_by_month[key].add(prid)
+                months_data[key].append(release)
+
     print("\n2. Writing clean data to Markdown files...")
-    
-    for year, releases in sorted(years_data.items(), reverse=True):
-        out_file = output_dir / f"fisheries_releases_{year}.md"
-        
+
+    written = 0
+    for key, releases in sorted(months_data.items(), reverse=True):
+        # Skip empty months entirely — no point creating/uploading a file with
+        # no releases (avoids polluting the store with placeholder documents).
+        if not releases:
+            continue
+
+        year, month = key.split('_')
+        out_file = output_dir / f"fisheries_releases_{key}.md"
+
         with open(out_file, 'w', encoding='utf-8') as f:
-            f.write(f"# Ministry of Fisheries, Animal Husbandry & Dairying - Press Releases ({year})\n\n")
-            
-            if not releases:
-                f.write("*No press releases found for this year.*\n")
-            else:
-                for r in releases:
-                    f.write(f"* **{r['date']}**: [{r['title']}]({r['url']})\n")
-        
+            f.write(f"# Ministry of Fisheries, Animal Husbandry & Dairying - Press Releases ({year}-{month})\n\n")
+            for r in releases:
+                f.write(f"* **{r['date']}**: [{r['title']}]({r['url']})\n")
+
+        written += 1
         print(f"  -> Saved {len(releases)} releases to {out_file.name}")
-        
-    print("\nSUCCESS! All data parsed and saved to the 'data_markdown' folder.")
+
+    print(f"\nSUCCESS! Wrote {written} monthly file(s) to the 'data_markdown' folder.")
 
 if __name__ == "__main__":
     process_all_files()

@@ -1,8 +1,9 @@
+import re
 import time
 import json
 import argparse
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date
 from colorama import Fore, Style
 from config import get_client, FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE, GOI_PIB_STORE
 
@@ -66,6 +67,25 @@ def record_upload(manifest: dict, file_path: Path, store_name: str):
     manifest[key] = {"uploaded_at": datetime.now().isoformat()}
 
 
+def is_recent_month_file(file_path: Path, skip_recent_months: int, today: date | None = None) -> bool:
+    """True if the filename encodes a YYYY_MM within the last `skip_recent_months`
+    months (i.e. the current/previous month, still mutable and not yet final).
+
+    Used by the monthly refresh to publish only *settled* months, so that an
+    uploaded file never changes afterwards and the manifest dedup stays correct.
+    skip_recent_months=2 matches scraper config.is_settled_month. Files whose name
+    carries no YYYY_MM (e.g. PDFs) are never considered recent.
+    """
+    if skip_recent_months <= 0:
+        return False
+    m = re.search(r"(\d{4})_(\d{2})$", file_path.stem)
+    if not m:
+        return False
+    today = today or date.today()
+    months_ago = (today.year - int(m.group(1))) * 12 + (today.month - int(m.group(2)))
+    return 0 <= months_ago < skip_recent_months
+
+
 # CLI Interface
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Upload files to a Gemini File Search Store")
@@ -74,6 +94,10 @@ if __name__ == "__main__":
     group.add_argument("--file", type=Path, help="Single file to upload")
     parser.add_argument("--store", required=True, help="Store name/ID or alias (foreign-academic, ground-truth, local-academic)")
     parser.add_argument("--mode", choices=["pdf-only", "md-only", "both"], default="both", help="Which file types to upload (default: both)")
+    parser.add_argument("--skip-recent-months", type=int, default=0, metavar="N",
+                        help="Skip files whose name ends in a YYYY_MM within the last N months "
+                             "(still-mutable months). Use 2 for the monthly refresh to upload only settled months.")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be uploaded without uploading")
 
     args = parser.parse_args()
 
@@ -92,6 +116,16 @@ if __name__ == "__main__":
         else:  # both
             files = list(args.dir.glob("*.pdf")) + list(args.dir.glob("*.md"))
 
+    # Exclude still-mutable recent months so we only publish final, immutable files.
+    if args.skip_recent_months > 0:
+        recent = [f for f in files if is_recent_month_file(f, args.skip_recent_months)]
+        for f in recent:
+            print(f"  Skipping (recent/in-progress month, not yet final): {f.name}")
+        files = [f for f in files if f not in recent]
+
+    if args.dry_run:
+        print(f"{Fore.YELLOW}DRY RUN — no files will be uploaded{Style.RESET_ALL}")
+
     manifest = load_manifest()
     uploaded, skipped, failed = 0, 0, 0
 
@@ -100,6 +134,9 @@ if __name__ == "__main__":
             print(f"  Skipping (already uploaded): {f.name}")
             skipped += 1
             continue
+        if args.dry_run:
+            print(f"  Would upload: {f.name}")
+            continue
         if upload_single_file(store_name, f):
             record_upload(manifest, f, store_name)
             save_manifest(manifest)
@@ -107,6 +144,6 @@ if __name__ == "__main__":
         else:
             failed += 1
 
-    print(f"\nDone! Uploaded: {uploaded}, Skipped: {skipped}, Failed: {failed}")
+    print(f"\n{'DRY RUN — ' if args.dry_run else ''}Done! Uploaded: {uploaded}, Skipped: {skipped}, Failed: {failed}")
 
 

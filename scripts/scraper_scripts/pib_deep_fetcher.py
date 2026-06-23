@@ -2,7 +2,7 @@ from camoufox.async_api import AsyncCamoufox
 import asyncio
 import re
 import random
-from config import PIB_ALL_RELEASES_URL, DATA_MARKDOWN_DIR, DATA_FULL_TEXT_DIR
+from config import PIB_ALL_RELEASES_URL, DATA_MARKDOWN_DIR, DATA_FULL_TEXT_DIR, is_settled_month
 
 async def _extract_article_text(page, retries=3, delay_ms=2000):
     """Pull article text from the release iframes, retrying when the page hasn't
@@ -34,13 +34,13 @@ async def fetch_full_text():
     output_dir = DATA_FULL_TEXT_DIR
     output_dir.mkdir(exist_ok=True)
     
-    # Grab all year-based index files
+    # Grab all per-month index files
     md_files = list(md_dir.glob("fisheries_releases_*.md"))
     if not md_files:
         print("No index files found in 'data_markdown'. Please run the parser first.")
         return
 
-    print(f"Found {len(md_files)} year files. Starting the deep fetch...")
+    print(f"Found {len(md_files)} monthly index files. Starting the deep fetch...")
     
     # Launch browser - Visible mode helps monitor progress
     async with AsyncCamoufox(headless="virtual") as browser:
@@ -51,20 +51,19 @@ async def fetch_full_text():
         await page.goto(PIB_ALL_RELEASES_URL)
         await page.wait_for_timeout(6000)
         
-        from datetime import date
-        current_year = str(date.today().year)
-
         for md_file in md_files:
-            # Skip a past year only if we already have its full-text output.
-            # Always redo the current year (its recent months keep growing).
-            year_match = re.search(r"fisheries_releases_(\d{4})", md_file.name)
-            file_year = year_match.group(1) if year_match else None
+            # Skip a month only if we already have its full-text output AND it's
+            # settled (older than the previous month). Current + previous month
+            # are always re-fetched because their indexes keep growing.
+            month_match = re.search(r"fisheries_releases_(\d{4})_(\d{2})", md_file.name)
             out_check = output_dir / md_file.name
-            if file_year and file_year != current_year and out_check.exists():
-                print(f"\n--- Skipping Year: {md_file.name} (already have full text) ---")
+            if month_match and out_check.exists() and is_settled_month(
+                int(month_match.group(1)), int(month_match.group(2))
+            ):
+                print(f"\n--- Skipping {md_file.name} (settled, already have full text) ---")
                 continue
 
-            print(f"\n--- Processing Year: {md_file.name} ---")
+            print(f"\n--- Processing: {md_file.name} ---")
             content = md_file.read_text(encoding="utf-8")
             
             # Regex to find: * **Date**: [Title](URL)

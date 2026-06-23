@@ -1,27 +1,15 @@
 from camoufox.async_api import AsyncCamoufox
 import asyncio
 import random
-from config import PIB_FISHERIES_RELEASES_URL, DATA_TEMP_DIR
-from datetime import date
+from config import PIB_FISHERIES_RELEASES_URL, DATA_TEMP_DIR, is_settled_month
 
 def _should_skip_month(year: str, month_val: str, output_dir) -> bool:
-    """Skip a month only if its file already exists AND it's older than the
-    current and previous month (which keep growing and must always refresh)."""
+    """Skip a month only if its file already exists AND it's settled (older than
+    the current and previous month, which keep growing and must always refresh)."""
     out_file = output_dir / f"pib_fisheries_{year}_{month_val.zfill(2)}.html"
     if not out_file.exists():
         return False  # never scraped → always fetch
-
-    today = date.today()
-    y, m = int(year), int(month_val)
-    # current month
-    if y == today.year and m == today.month:
-        return False
-    # previous month (handle January → December rollover)
-    prev_year = today.year if today.month > 1 else today.year - 1
-    prev_month = today.month - 1 if today.month > 1 else 12
-    if y == prev_year and m == prev_month:
-        return False
-    return True  # older month, already on disk → skip
+    return is_settled_month(int(year), int(month_val))  # older, already on disk → skip
 
 async def _get_content_with_retry(page, retries=3, delay_ms=2000):
     """Fetch page.content(), retrying through the ASP.NET postback race where
