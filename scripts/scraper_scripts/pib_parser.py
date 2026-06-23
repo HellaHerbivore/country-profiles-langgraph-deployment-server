@@ -1,6 +1,7 @@
 import os
+import re
 from bs4 import BeautifulSoup
-from pathlib import Path
+from config import PIB_BASE_URL, DATA_TEMP_DIR, DATA_MARKDOWN_DIR
 
 def parse_pib_html(html_filepath):
     """Reads a single HTML file and returns a list of press releases."""
@@ -8,6 +9,7 @@ def parse_pib_html(html_filepath):
         soup = BeautifulSoup(f, 'html.parser')
     
     releases = []
+    seen_prids = set()  # dedupe: same release can appear with decorated URLs
     # The PIB site keeps the releases inside a <ul> with class 'num'
     list_container = soup.find('ul', class_='num')
     
@@ -20,8 +22,16 @@ def parse_pib_html(html_filepath):
             
             if link_tag and date_tag:
                 title = link_tag.get_text(strip=True)
-                url = "https://pib.gov.in" + link_tag.get('href')
+                url = PIB_BASE_URL + link_tag.get('href')
                 date_str = date_tag.get_text(strip=True).replace("Posted on: ", "")
+                
+                # A release's identity is its PRID; the same PRID can appear
+                # with extra query params (&reg=48&lang=1). Keep one per PRID.
+                prid_match = re.search(r"PRID=(\d+)", url)
+                prid = prid_match.group(1) if prid_match else url
+                if prid in seen_prids:
+                    continue
+                seen_prids.add(prid)
                 
                 releases.append({
                     "title": title,
@@ -31,8 +41,8 @@ def parse_pib_html(html_filepath):
     return releases
 
 def process_all_files():
-    input_dir = Path("data_temp")
-    output_dir = Path("data_markdown")
+    input_dir = DATA_TEMP_DIR
+    output_dir = DATA_MARKDOWN_DIR
     output_dir.mkdir(exist_ok=True)
     
     print("1. Scanning for downloaded HTML files...")
@@ -47,6 +57,8 @@ def process_all_files():
     # We will process them year by year
     years_data = {}
     
+    seen_prids_by_year = {}  # year -> set of PRIDs already kept
+
     for filepath in html_files:
         filename = filepath.stem
         # filename format is pib_fisheries_YYYY_MM
@@ -58,8 +70,15 @@ def process_all_files():
             
             if year not in years_data:
                 years_data[year] = []
+                seen_prids_by_year[year] = set()
             
-            years_data[year].extend(releases)
+            for release in releases:
+                prid_match = re.search(r"PRID=(\d+)", release["url"])
+                prid = prid_match.group(1) if prid_match else release["url"]
+                if prid in seen_prids_by_year[year]:
+                    continue
+                seen_prids_by_year[year].add(prid)
+                years_data[year].append(release)
     
     print("\n2. Writing clean data to Markdown files...")
     
