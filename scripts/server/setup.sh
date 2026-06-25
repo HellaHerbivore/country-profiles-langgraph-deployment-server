@@ -10,8 +10,14 @@ cd "$REPO_ROOT"
 
 echo "==> System libraries (Firefox/Camoufox runtime + virtual display)..."
 sudo apt-get update
+# Packages that keep the same name everywhere.
 sudo apt-get install -y --no-install-recommends \
-    libgtk-3-0 libx11-xcb1 libasound2 xvfb python3-venv python3-pip
+    libx11-xcb1 xvfb python3-venv python3-pip
+# GTK and ALSA were renamed with a 't64' suffix on Ubuntu 24.04 (the 64-bit
+# time_t transition). Try the new names first, fall back to the classic ones
+# for Debian / older Ubuntu.
+sudo apt-get install -y --no-install-recommends libgtk-3-0t64 libasound2t64 \
+    || sudo apt-get install -y --no-install-recommends libgtk-3-0 libasound2
 
 echo "==> Virtualenv at $VENV ..."
 python3 -m venv "$VENV"
