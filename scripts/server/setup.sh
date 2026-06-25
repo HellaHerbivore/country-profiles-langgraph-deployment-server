@@ -31,8 +31,12 @@ echo "==> Camoufox browser binary..."
 "$VENV/bin/python" -m camoufox fetch
 
 echo "==> Verifying both halves import..."
-( cd scripts/scraper_scripts  && "$VENV/bin/python" -c "from camoufox.async_api import AsyncCamoufox; print('    browser deps OK')" )
-( cd scripts/filestore_scripts && "$VENV/bin/python" -c "from config import GOI_PIB_STORE; from upload_to_store import load_manifest; print('    uploader deps OK')" )
+( cd scripts/scraper_scripts && "$VENV/bin/python" -c "from camoufox.async_api import AsyncCamoufox; print('    browser deps OK')" )
+# Check the uploader's libraries are importable. We deliberately import the
+# packages directly rather than the app modules: upload_to_store.py builds a
+# genai client at import time, which would need the API key that isn't added
+# until the next step. Library presence is what we're verifying here.
+"$VENV/bin/python" -c "import google.genai, dotenv, colorama; print('    uploader deps OK')"
 
 echo "==> API key check (.env at repo root)..."
 if [ -f "$REPO_ROOT/.env" ] && grep -q '^GOOGLE_API_KEY=' "$REPO_ROOT/.env"; then
