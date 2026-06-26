@@ -5,7 +5,14 @@ import argparse
 from pathlib import Path
 from datetime import datetime, date
 from colorama import Fore, Style
-from config import get_client, FOREIGN_ACADEMIC_STORE, ON_GROUND_ADVOCATE_STORE, LOCAL_ACADEMIC_STORE, GOI_PIB_STORE
+from config import (
+    get_client,
+    FOREIGN_ACADEMIC_STORE,
+    ON_GROUND_ADVOCATE_STORE,
+    LOCAL_ACADEMIC_STORE,
+    GOI_PIB_STORE,
+    REGULATORY_ENVIRONMENT_STORE,
+)
 
 # Store aliases for convenience
 STORE_ALIASES = {
@@ -13,6 +20,7 @@ STORE_ALIASES = {
     "on-ground": ON_GROUND_ADVOCATE_STORE,
     "local-academic": LOCAL_ACADEMIC_STORE,
     "goi-pib": GOI_PIB_STORE,
+    "regulatory-environment": REGULATORY_ENVIRONMENT_STORE,
 }
 
 client = get_client()
@@ -67,6 +75,44 @@ def record_upload(manifest: dict, file_path: Path, store_name: str):
     manifest[key] = {"uploaded_at": datetime.now().isoformat()}
 
 
+def _delete_document_config():
+    """force=True deletes a document even though it has indexed chunks. Prefer the
+    typed config (per Google's cookbook); fall back to a dict on older SDKs."""
+    try:
+        from google.genai import types
+        return types.DeleteDocumentConfig(force=True)
+    except (ImportError, AttributeError):
+        return {"force": True}
+
+
+def delete_docs_by_display_name(store_name: str, display_name: str, dry_run: bool = False) -> int:
+    """Delete every document in the store whose display name matches; return the count.
+
+    Used by --replace-by-display-name for *living documents* (e.g. the ICNL Civic
+    Freedom Monitor page): the store should hold exactly one current copy, so the
+    prior one is removed before the fresh snapshot is uploaded."""
+    try:
+        docs = list(client.file_search_stores.documents.list(parent=store_name))
+    except Exception as e:
+        print(f"  {Fore.YELLOW}⚠️  Could not list documents to replace: {e}{Style.RESET_ALL}")
+        return 0
+    deleted = 0
+    for doc in docs:
+        if (getattr(doc, "display_name", "") or "") != display_name:
+            continue
+        if dry_run:
+            print(f"  Would delete existing: {display_name} ({doc.name})")
+            deleted += 1
+            continue
+        try:
+            client.file_search_stores.documents.delete(name=doc.name, config=_delete_document_config())
+            print(f"  {Fore.CYAN}🗑️  Deleted existing: {display_name}{Style.RESET_ALL}")
+            deleted += 1
+        except Exception as e:
+            print(f"  {Fore.YELLOW}⚠️  Failed to delete {doc.name}: {e}{Style.RESET_ALL}")
+    return deleted
+
+
 def is_recent_month_file(file_path: Path, skip_recent_months: int, today: date | None = None) -> bool:
     """True if the filename encodes a YYYY_MM within the last `skip_recent_months`
     months (i.e. the current/previous month, still mutable and not yet final).
@@ -97,6 +143,10 @@ if __name__ == "__main__":
     parser.add_argument("--skip-recent-months", type=int, default=0, metavar="N",
                         help="Skip files whose name ends in a YYYY_MM within the last N months "
                              "(still-mutable months). Use 2 for the monthly refresh to upload only settled months.")
+    parser.add_argument("--replace-by-display-name", action="store_true",
+                        help="Living-document mode: before uploading each file, delete any existing "
+                             "document in the store with the same display name (the file's name), and "
+                             "bypass the manifest dedup so the latest scrape always replaces the old one.")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be uploaded without uploading")
 
     args = parser.parse_args()
@@ -130,6 +180,19 @@ if __name__ == "__main__":
     uploaded, skipped, failed = 0, 0, 0
 
     for f in files:
+        # Living-document mode: replace the prior copy, ignore the manifest.
+        if args.replace_by_display_name:
+            delete_docs_by_display_name(store_name, f.name, dry_run=args.dry_run)
+            if args.dry_run:
+                print(f"  Would upload (replace): {f.name}")
+                continue
+            if upload_single_file(store_name, f):
+                uploaded += 1
+            else:
+                failed += 1
+            continue
+
+        # Default append-only mode: manifest dedups already-published files.
         if is_already_uploaded(manifest, f, store_name):
             print(f"  Skipping (already uploaded): {f.name}")
             skipped += 1

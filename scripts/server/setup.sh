@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One-time provisioning for the monthly PIB refresh on a Linux VPS (Debian/Ubuntu).
-# Idempotent — safe to re-run. From the repository root:
+# One-time provisioning for the monthly scraper refreshes on a Linux VPS
+# (Debian/Ubuntu). Idempotent — safe to re-run. From the repository root:
 #   bash scripts/server/setup.sh
 set -euo pipefail
 
@@ -23,8 +23,9 @@ echo "==> Virtualenv at $VENV ..."
 python3 -m venv "$VENV"
 "$VENV/bin/pip" install --quiet --upgrade pip
 
-echo "==> Python dependencies (scraper + uploader)..."
+echo "==> Python dependencies (scrapers + uploader)..."
 "$VENV/bin/pip" install --quiet -r scripts/scraper_scripts/requirements.txt
+"$VENV/bin/pip" install --quiet -r scripts/scraper_scripts/icnl/requirements.txt
 "$VENV/bin/pip" install --quiet google-genai python-dotenv colorama
 
 echo "==> Camoufox browser binary..."
@@ -49,10 +50,11 @@ cat <<EOF
 
 Setup complete. Remaining steps:
   1. Make sure $REPO_ROOT/.env contains GOOGLE_API_KEY.
-  2. Schedule it — run 'crontab -e' and add this line:
+  2. Schedule each source — run 'crontab -e' and add these lines:
 
-       0 3 2 * * $REPO_ROOT/scripts/server/run_refresh.sh
+       0 3 2  * * $REPO_ROOT/scripts/server/run_refresh.sh pib
+       0 3 26 * * $REPO_ROOT/scripts/server/run_refresh.sh icnl
 
-     (03:00 on the 2nd of each month; adjust with https://crontab.guru)
+     (03:00 UTC on the 2nd / 26th of each month; adjust with https://crontab.guru)
   3. First backfill is a long one-off — see scripts/server/README.md.
 EOF

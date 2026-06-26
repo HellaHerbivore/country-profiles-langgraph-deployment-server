@@ -55,6 +55,7 @@ reports/
 data_temp/
 data_markdown/
 data_full_text/
+data_html/
 
 # Open Paws Tools
 .desloppify/

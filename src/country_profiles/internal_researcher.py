@@ -37,6 +37,9 @@ FOREIGN_ACADEMIC_STORE = "fileSearchStores/foreign-academic-sources-bqaqi98at2b3
 ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy92h3"
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
+# Set this once the store is created (scripts/filestore_scripts/setup_store.py
+# --name "Regulatory Environment"); keep in sync with filestore_scripts/config.py.
+REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-REPLACE_ME"
 
 # Maps a human-readable store key -> (file_search_store_id, description for retrieval scoping)
 STORE_REGISTRY = {
@@ -44,6 +47,7 @@ STORE_REGISTRY = {
     "onground_advocate": (ON_GROUND_ADVOCATE_STORE, "On-the-ground advocate and field organisation sources."),
     "local_academic": (LOCAL_ACADEMIC_STORE, "India-based academic research sources."),
     "goi_pib": (GOI_PIB_STORE, "Government of India PIB press releases (Ministry of Fisheries, Animal Husbandry & Dairying)."),
+    "regulatory_environment": (REGULATORY_ENVIRONMENT_STORE, "ICNL Civic Freedom Monitor — India's legal/regulatory environment for civil society (NGO registration, FCRA foreign-funding rules, and barriers to formation, operations, resources, expression and assembly)."),
 }
 
 # Default selection until user-driven selection is wired in.
@@ -57,6 +61,7 @@ DATA_SOURCE_DESCRIPTIONS = {
     "local_academic": "India-based academic research",
     "goi_pib": "Government of India press information (Ministry of Fisheries, Animal Husbandry & Dairying)",
     "onground_advocate": "commentary from the Stray Dog Regional Advisory Panel",
+    "regulatory_environment": "the regulatory and legal environment for civil society (ICNL Civic Freedom Monitor)",
 }
 
 # ---------------------------------------------------------------------------
@@ -471,13 +476,13 @@ EVAL_DIMENSIONS = [
     {
         "key": "reg_legal",
         "label": "Legal environment",
-        "stores": ["goi_pib", "local_academic", "foreign_academic"],
+        "stores": ["regulatory_environment", "goi_pib", "local_academic", "foreign_academic"],
         "brief": "The laws, regulations and formal compliance requirements in India that would apply to a nonprofit carrying out this kind of work — registration, foreign-funding rules (e.g. FCRA) for foreign charities, sector-specific animal-welfare law, and any licensing or permissions the activities would require.",
     },
     {
         "key": "reg_political",
         "label": "Political environment",
-        "stores": ["goi_pib", "local_academic", "onground_advocate"],
+        "stores": ["goi_pib", "local_academic", "onground_advocate", "regulatory_environment"],
         "brief": "The political climate in India relevant to this path — government priorities, political will or resistance on animal welfare and adjacent sectors, and how political dynamics could help or hinder the work.",
     },
     {
@@ -489,7 +494,7 @@ EVAL_DIMENSIONS = [
     {
         "key": "reg_charity_attitudes",
         "label": "Cultural attitudes towards foreign and local charities",
-        "stores": ["onground_advocate", "local_academic", "foreign_academic"],
+        "stores": ["onground_advocate", "local_academic", "foreign_academic", "regulatory_environment"],
         "brief": "How foreign and local charities/nonprofits are perceived in India in this domain — trust, suspicion, acceptance or hostility towards outside organisations versus homegrown ones.",
     },
     {
@@ -513,7 +518,7 @@ EVAL_DIMENSIONS = [
     {
         "key": "windows_unspotted",
         "label": "Opportunities the charity may not have spotted",
-        "stores": ["foreign_academic", "onground_advocate", "local_academic", "goi_pib"],
+        "stores": ["foreign_academic", "onground_advocate", "local_academic", "goi_pib", "regulatory_environment"],
         "brief": "Time-sensitive openings or levers in India that this charity's path could exploit but may not have noticed — emerging policy moments, market shifts, coalitions, producer segments, electoral cycles or attention spikes relevant to its activities.",
     },
     {
@@ -1143,7 +1148,7 @@ Gaps and findings to tie experts to:
 def write_experts(state: ResearchGraphState):
     """Section 11 — gap-dependent retrieval for named experts/organisations to contact."""
     selected = _resolve_selected_stores(state.get("selected_stores"))
-    store_keys = [k for k in ["onground_advocate", "local_academic", "goi_pib", "foreign_academic"] if k in selected] or selected
+    store_keys = [k for k in ["onground_advocate", "local_academic", "goi_pib", "foreign_academic", "regulatory_environment"] if k in selected] or selected
     active_store_ids = [STORE_REGISTRY[k][0] for k in store_keys]
     gaps_digest = _sections_digest(state)
 

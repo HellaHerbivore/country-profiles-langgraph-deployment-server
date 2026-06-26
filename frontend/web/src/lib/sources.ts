@@ -35,6 +35,13 @@ export const SOURCES: readonly Source[] = [
     storeKey: "goi_pib",
     comingSoon: false,
   },
+  {
+    id: "regulatory-environment",
+    label: "Regulatory Environment",
+    defaultChecked: true,
+    storeKey: "regulatory_environment",
+    comingSoon: false,
+  },
   { id: "news", label: "news", defaultChecked: false, storeKey: null, comingSoon: true },
   { id: "reddit", label: "Reddit", defaultChecked: false, storeKey: null, comingSoon: true },
   { id: "linkedin", label: "LinkedIn", defaultChecked: false, storeKey: null, comingSoon: true },

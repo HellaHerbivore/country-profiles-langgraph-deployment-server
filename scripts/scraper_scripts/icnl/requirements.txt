@@ -1,0 +1,4 @@
+camoufox[geoip]
+beautifulsoup4
+playwright==1.59.0
+markdownify
