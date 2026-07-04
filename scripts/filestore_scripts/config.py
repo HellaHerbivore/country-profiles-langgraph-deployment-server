@@ -13,10 +13,7 @@ FOREIGN_ACADEMIC_STORE = "fileSearchStores/foreign-academic-sources-bqaqi98at2b3
 ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy92h3"
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
-# TODO: fill in after creating the store once:
-#   python setup_store.py --name "Regulatory Environment"
-# then paste the returned id here AND in internal_researcher.py.
-REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-REPLACE_ME"
+REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-o2q9s4tpmr2g"
 
 def get_client():
     """Return a configured genai Client."""
