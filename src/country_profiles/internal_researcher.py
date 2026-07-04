@@ -37,9 +37,7 @@ FOREIGN_ACADEMIC_STORE = "fileSearchStores/foreign-academic-sources-bqaqi98at2b3
 ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy92h3"
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
-# Set this once the store is created (scripts/filestore_scripts/setup_store.py
-# --name "Regulatory Environment"); keep in sync with filestore_scripts/config.py.
-REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-REPLACE_ME"
+REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-o2q9s4tpmr2g"
 
 # Maps a human-readable store key -> (file_search_store_id, description for retrieval scoping)
 STORE_REGISTRY = {
