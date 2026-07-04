@@ -52,7 +52,7 @@ async def fetch_icnl_page() -> None:
     out_dir.mkdir(exist_ok=True)
 
     print("1. Starting Camoufox (virtual headless)...")
-    async with AsyncCamoufox(headless="virtual") as browser:
+    async with AsyncCamoufox(headless=True) as browser:
         page = await browser.new_page()
 
         print(f"2. Loading {ICNL_INDIA_URL} ...")
