@@ -14,6 +14,10 @@ ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy9
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
 REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-o2q9s4tpmr2g"
+# ACE Movement Map 2026 (per-organization profiles). To populate: run
+#   python setup_store.py --name "Movement Map"
+# and paste the printed fileSearchStores/... ID here.
+MOVEMENT_MAP_STORE = ""
 
 def get_client():
     """Return a configured genai Client."""
