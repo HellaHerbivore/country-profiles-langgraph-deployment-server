@@ -63,17 +63,21 @@ python upload_movement_map.py --manifest ../../../data/movement_map/movement_map
 so the store always holds exactly one current profile per org. Orgs removed
 from the sheet are NOT auto-deleted; remove them manually or recreate the store.
 
-## Follow-up: wiring the store into the agent (not done yet)
+## Agent wiring (done)
 
-Once the store is populated and verified:
+The store is registered end to end:
 
-1. `scripts/filestore_scripts/config.py` — `MOVEMENT_MAP_STORE` already holds the ID.
-2. `src/country_profiles/internal_researcher.py` — add the same constant next to
-   the other store IDs (~line 36-40), a `STORE_REGISTRY` entry (~line 43-49), and
-   a `DATA_SOURCE_DESCRIPTIONS` entry (~line 57-63).
-3. Add the `movement_map` key to the relevant `EVAL_DIMENSIONS` entries
-   (~line 473-546) so retrieval fans out to this store where it matters.
-4. Optional: add a `"movement-map"` alias in `scripts/filestore_scripts/upload_to_store.py`.
+1. `scripts/filestore_scripts/config.py` — `MOVEMENT_MAP_STORE` holds the store ID
+   (kept in sync with `internal_researcher.py`).
+2. `src/country_profiles/internal_researcher.py` — constant + `STORE_REGISTRY`
+   entry (`movement_map`) + `DATA_SOURCE_DESCRIPTIONS` entry.
+3. `EVAL_DIMENSIONS`: `movement_map` feeds `team_players` (Existing Players Doing
+   Similar Work), `challenges_landscape` (advocacy-landscape crowding/gaps), and
+   `windows_unspotted` (coalition/partner opportunities); it is also searched by
+   the On-the-Ground Experts writer.
+4. `scripts/filestore_scripts/upload_to_store.py` — `"movement-map"` alias.
+5. `frontend/web/src/lib/sources.ts` — "Movement Map" source checkbox
+   (checked by default).
 
-Citations will show as `Movement Map - {Organization}`; no citation-rule
-exception is needed since each document is a single logical record.
+Citations show as `Movement Map - {Organization}`; no citation-rule exception is
+needed since each document is a single logical record.

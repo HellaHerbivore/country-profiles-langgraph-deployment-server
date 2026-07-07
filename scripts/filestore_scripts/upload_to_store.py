@@ -12,6 +12,7 @@ from config import (
     LOCAL_ACADEMIC_STORE,
     GOI_PIB_STORE,
     REGULATORY_ENVIRONMENT_STORE,
+    MOVEMENT_MAP_STORE,
 )
 
 # Store aliases for convenience
@@ -21,6 +22,7 @@ STORE_ALIASES = {
     "local-academic": LOCAL_ACADEMIC_STORE,
     "goi-pib": GOI_PIB_STORE,
     "regulatory-environment": REGULATORY_ENVIRONMENT_STORE,
+    "movement-map": MOVEMENT_MAP_STORE,
 }
 
 client = get_client()

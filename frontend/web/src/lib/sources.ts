@@ -42,6 +42,13 @@ export const SOURCES: readonly Source[] = [
     storeKey: "regulatory_environment",
     comingSoon: false,
   },
+  {
+    id: "movement-map",
+    label: "Movement Map",
+    defaultChecked: true,
+    storeKey: "movement_map",
+    comingSoon: false,
+  },
   { id: "news", label: "news", defaultChecked: false, storeKey: null, comingSoon: true },
   { id: "reddit", label: "Reddit", defaultChecked: false, storeKey: null, comingSoon: true },
   { id: "linkedin", label: "LinkedIn", defaultChecked: false, storeKey: null, comingSoon: true },

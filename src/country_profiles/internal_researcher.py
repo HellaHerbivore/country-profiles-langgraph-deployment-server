@@ -38,6 +38,7 @@ ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy9
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
 REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-o2q9s4tpmr2g"
+MOVEMENT_MAP_STORE = "fileSearchStores/movement-map-jzf154g2op6j"
 
 # Maps a human-readable store key -> (file_search_store_id, description for retrieval scoping)
 STORE_REGISTRY = {
@@ -46,6 +47,7 @@ STORE_REGISTRY = {
     "local_academic": (LOCAL_ACADEMIC_STORE, "India-based academic research sources."),
     "goi_pib": (GOI_PIB_STORE, "Government of India PIB press releases (Ministry of Fisheries, Animal Husbandry & Dairying)."),
     "regulatory_environment": (REGULATORY_ENVIRONMENT_STORE, "ICNL Civic Freedom Monitor — India's legal/regulatory environment for civil society (NGO registration, FCRA foreign-funding rules, and barriers to formation, operations, resources, expression and assembly)."),
+    "movement_map": (MOVEMENT_MAP_STORE, "ACE Movement Map 2026 — one profile per animal-advocacy organisation worldwide (~950 orgs): country of registration, regions of operation, animals helped, interventions used, budget tier, recent major funders, and ACE evaluation history."),
 }
 
 # Default selection until user-driven selection is wired in.
@@ -60,6 +62,7 @@ DATA_SOURCE_DESCRIPTIONS = {
     "goi_pib": "Government of India press information (Ministry of Fisheries, Animal Husbandry & Dairying)",
     "onground_advocate": "commentary from the Stray Dog Regional Advisory Panel",
     "regulatory_environment": "the regulatory and legal environment for civil society (ICNL Civic Freedom Monitor)",
+    "movement_map": "a map of the global animal-advocacy ecosystem (organisation profiles: focus, interventions, budgets and funders)",
 }
 
 # ---------------------------------------------------------------------------
@@ -516,7 +519,7 @@ EVAL_DIMENSIONS = [
     {
         "key": "windows_unspotted",
         "label": "Opportunities the charity may not have spotted",
-        "stores": ["foreign_academic", "onground_advocate", "local_academic", "goi_pib", "regulatory_environment"],
+        "stores": ["foreign_academic", "onground_advocate", "local_academic", "goi_pib", "regulatory_environment", "movement_map"],
         "brief": "Time-sensitive openings or levers in India that this charity's path could exploit but may not have noticed — emerging policy moments, market shifts, coalitions, producer segments, electoral cycles or attention spikes relevant to its activities.",
     },
     {
@@ -528,14 +531,14 @@ EVAL_DIMENSIONS = [
     {
         "key": "challenges_landscape",
         "label": "Animal advocacy landscape challenges",
-        "stores": ["onground_advocate", "local_academic", "foreign_academic"],
+        "stores": ["movement_map", "onground_advocate", "local_academic", "foreign_academic"],
         "brief": "Challenges in the Indian animal-advocacy landscape itself relevant to this path — crowding, fragmentation, funding constraints, capacity gaps, or strategic tensions among advocacy actors.",
     },
     {
         "key": "team_players",
         "label": "Existing players doing similar work",
-        "stores": ["onground_advocate", "local_academic", "goi_pib"],
-        "brief": "Organisations, coalitions, government bodies or individuals already doing work similar to this charity's path in India, and what the evidence says they are currently doing.",
+        "stores": ["movement_map", "onground_advocate", "local_academic", "goi_pib"],
+        "brief": "Organisations, coalitions, government bodies or individuals already doing work similar to this charity's path in India, and what the evidence says they are currently doing — including organisations registered in or operating in India, and international organisations using similar interventions or helping the same animal groups.",
     },
     {
         "key": "effectiveness",
@@ -1146,7 +1149,7 @@ Gaps and findings to tie experts to:
 def write_experts(state: ResearchGraphState):
     """Section 11 — gap-dependent retrieval for named experts/organisations to contact."""
     selected = _resolve_selected_stores(state.get("selected_stores"))
-    store_keys = [k for k in ["onground_advocate", "local_academic", "goi_pib", "foreign_academic", "regulatory_environment"] if k in selected] or selected
+    store_keys = [k for k in ["onground_advocate", "local_academic", "goi_pib", "foreign_academic", "regulatory_environment", "movement_map"] if k in selected] or selected
     active_store_ids = [STORE_REGISTRY[k][0] for k in store_keys]
     gaps_digest = _sections_digest(state)
 
