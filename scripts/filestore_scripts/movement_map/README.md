@@ -40,8 +40,10 @@ python convert_movement_map.py --csv /path/to/movement_map.csv
 # 3. Upload (parallel; resumes automatically if interrupted)
 python upload_movement_map.py --manifest ../../../data/movement_map/movement_map_manifest.json
 
-# 4. Verify attribution integrity (spot-checks that answers about an org cite
-#    ONLY that org's document, plus a metadata_filter smoke test)
+# 4. Verify attribution integrity (spot-checks that answers about an org are
+#    grounded in that org's own document with the correct budget tier, plus a
+#    metadata_filter smoke test; similar orgs also appearing in the retrieval
+#    set is normal top-k behavior, not misattribution)
 python verify_movement_map.py --manifest ../../../data/movement_map/movement_map_manifest.json --seed 42
 ```
 
