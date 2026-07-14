@@ -53,6 +53,11 @@ STORE_REGISTRY = {
 # Default selection until user-driven selection is wired in.
 DEFAULT_SELECTED_STORES = list(STORE_REGISTRY.keys())
 
+# Gemini File Search rejects requests with more than 5 stores ("Max 5 corpora
+# can be specified"). Every retrieval must cap its store list; dimension store
+# lists are priority-ordered so the cap drops the least relevant stores first.
+MAX_FILE_SEARCH_STORES = 5
+
 # Plain-language descriptions used in user-facing text. These are by DATA TYPE,
 # never the internal store keys. The on-the-ground advocate source is surfaced as
 # the Stray Dog Regional Advisory Panel Commentary.
@@ -519,7 +524,7 @@ EVAL_DIMENSIONS = [
     {
         "key": "windows_unspotted",
         "label": "Opportunities the charity may not have spotted",
-        "stores": ["foreign_academic", "onground_advocate", "local_academic", "goi_pib", "regulatory_environment", "movement_map"],
+        "stores": ["foreign_academic", "onground_advocate", "local_academic", "goi_pib", "movement_map"],
         "brief": "Time-sensitive openings or levers in India that this charity's path could exploit but may not have noticed — emerging policy moments, market shifts, coalitions, producer segments, electoral cycles or attention spikes relevant to its activities.",
     },
     {
@@ -584,7 +589,7 @@ def gather_evidence(state: ResearchGraphState):
     path_brief = state.get("path_brief", "")
     selected = _resolve_selected_stores(state.get("selected_stores"))
 
-    store_keys = [k for k in dimension.get("stores", []) if k in selected] or selected
+    store_keys = ([k for k in dimension.get("stores", []) if k in selected] or selected)[:MAX_FILE_SEARCH_STORES]
     active_store_ids = [STORE_REGISTRY[k][0] for k in store_keys]
     pib_selected = "goi_pib" in store_keys
 
@@ -641,20 +646,27 @@ CRITICAL RULES:
             print(f"[gather_evidence] server glitch on try {try_count + 1} ({dimension['key']}): {e}")
             if try_count < max_tries - 1:
                 time.sleep(3)
-            else:
-                return {
-                    "evidence_memos": [{
-                        "key": dimension["key"], "label": dimension["label"],
-                        "memo": "", "no_knowledge": True, "sources": [],
-                    }],
-                    "evidence_signals": [{
-                        "label": dimension["label"], "sources": [], "no_knowledge": True,
-                    }],
-                    "messages": [AIMessage(
-                        content=f"[PROGRESS:30] The {dimension['label'].lower()} check couldn't be completed — a source vault was unreachable.",
-                        name="System",
-                    )],
-                }
+        except Exception as e:
+            # Client errors (bad request, permissions, rate caps) won't heal on
+            # retry. Degrade this dimension to "no information" instead of
+            # letting one bad retrieval kill the entire run.
+            print(f"[gather_evidence] retrieval failed ({dimension['key']}): {e}")
+            break
+
+    if response is None:
+        return {
+            "evidence_memos": [{
+                "key": dimension["key"], "label": dimension["label"],
+                "memo": "", "no_knowledge": True, "sources": [],
+            }],
+            "evidence_signals": [{
+                "label": dimension["label"], "sources": [], "no_knowledge": True,
+            }],
+            "messages": [AIMessage(
+                content=f"[PROGRESS:30] The {dimension['label'].lower()} check couldn't be completed — a source vault was unreachable.",
+                name="System",
+            )],
+        }
 
     answer_text = response.text if (response and response.text) else "The internal vaults do not contain this information."
     consulted_sources = _extract_consulted_sources(response) if response else []
@@ -1149,7 +1161,7 @@ Gaps and findings to tie experts to:
 def write_experts(state: ResearchGraphState):
     """Section 11 — gap-dependent retrieval for named experts/organisations to contact."""
     selected = _resolve_selected_stores(state.get("selected_stores"))
-    store_keys = [k for k in ["onground_advocate", "local_academic", "goi_pib", "foreign_academic", "regulatory_environment", "movement_map"] if k in selected] or selected
+    store_keys = ([k for k in ["onground_advocate", "movement_map", "local_academic", "goi_pib", "foreign_academic", "regulatory_environment"] if k in selected] or selected)[:MAX_FILE_SEARCH_STORES]
     active_store_ids = [STORE_REGISTRY[k][0] for k in store_keys]
     gaps_digest = _sections_digest(state)
 
