@@ -957,7 +957,7 @@ def write_methodology(state: ResearchGraphState):
     }
 
 
-regulatory_instructions = """You are writing the "Regulatory Environment" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
+regulatory_instructions = """You are writing the "Regulatory Environment for Nonprofits in India" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
 
 Background context on India (use as orientation; cite specific claims to the research memos where they support them — do not cite this background itself):
 {india_macro}
@@ -996,9 +996,9 @@ def write_regulatory(state: ResearchGraphState):
         [SystemMessage(content=system_message), HumanMessage(content="Write the four subsection bodies.")]
     ))
     return {"regulatory_section": _render_subsections([
-        ("a. Legal", res.legal),
-        ("b. Political", res.political),
-        ("c. Safety", res.safety),
+        ("a. Legal Environment for Nonprofits in India", res.legal),
+        ("b. Political Environment for Nonprofits in India", res.political),
+        ("c. Safety for Nonprofit Operations in India", res.safety),
         ("d. Cultural Attitudes Towards Foreign and Local Charities", res.charity_attitudes),
     ])}
 
@@ -1177,7 +1177,7 @@ def write_team(state: ResearchGraphState):
 def _sections_digest(state: ResearchGraphState, trim: int | None = 1200) -> str:
     """A digest of the drafted analysis sections, for the derived writers."""
     labelled = [
-        ("Regulatory Environment", state.get("regulatory_section", "")),
+        ("Regulatory Environment for Nonprofits in India", state.get("regulatory_section", "")),
         ("Path Analysis", state.get("path_analysis_section", "")),
         ("Windows of Opportunity", state.get("windows_section", "")),
         ("Challenges, Risks & Effectiveness", state.get("challenges_section", "")),
@@ -1285,19 +1285,29 @@ def write_experts(state: ResearchGraphState):
     return {"experts_section": text}
 
 
-class EvaluationSummaryContent(BaseModel):
-    assumptions: List[str] = Field(default_factory=list, description="Major assumptions the intervention is built on. Each entry one short sentence.")
-    known: List[str] = Field(default_factory=list, description="What we know — the clearest findings the evaluation established. Each entry one short sentence.")
-    critical_unknowns: List[str] = Field(default_factory=list, description="What's critical to figure out — the open questions that most affect whether the path works. Each entry one short sentence.")
+# One row of the evidence snapshot. The three cells are anchored to each other:
+# `known` and `critical` must both be ABOUT this row's assumption, so every row
+# reads left to right as one coherent line of reasoning.
+class EvidenceSnapshotRow(BaseModel):
+    assumption: str = Field(description="One major assumption the intervention is built on, as one short sentence.")
+    known: str = Field(default="", description="What we know — the evaluation's clearest finding(s) bearing on THIS assumption, one short sentence. Empty if the evaluation surfaced nothing that bears on it.")
+    critical: str = Field(default="", description="What's critical to figure out — the open question that most determines whether THIS assumption holds, one short sentence. Empty if nothing critical remains.")
 
 
-evaluation_summary_instructions = """You are writing the "Evaluation Summary" of a theory-of-change evaluation — a glanceable digest of the finished evaluation, structured as three lists:
-- assumptions: the major assumptions the intervention is built on (stated by the charity or surfaced by the evaluation).
-- known: what we know — the clearest findings the evaluation established, favouring points well supported by the sections below.
-- critical_unknowns: what's critical to figure out — the open questions and gaps that most affect whether the path can work.
+class EvidenceSnapshotContent(BaseModel):
+    rows: List[EvidenceSnapshotRow] = Field(default_factory=list, description="One row per major assumption, most important first.")
+
+
+evidence_snapshot_instructions = """You are writing the "Snapshot of the Evidence" of a theory-of-change evaluation — a glanceable table distilled from the finished evaluation. Each row is anchored on ONE major assumption the intervention is built on (stated by the charity or surfaced by the evaluation), and reads left to right as a single line of reasoning:
+- assumption: the assumption itself.
+- known: what we know — the evaluation's clearest finding(s) that bear on THIS assumption.
+- critical: what's critical to figure out — the open question that most determines whether THIS assumption holds.
 
 Rules:
-- 3-6 entries per list, each ONE short, self-contained sentence, most important first.
+- 3-6 rows, most important assumption first.
+- `known` and `critical` MUST be about the row's assumption. Never place an unrelated finding or question in a row; if a finding from the evaluation does not bear on any major assumption, leave it out of this table.
+- Where the evaluation surfaced nothing bearing on an assumption, leave `known` empty — that gap is itself informative.
+- Each cell is ONE short, self-contained sentence.
 - Draw only on the evaluation sections provided; do not introduce new claims.
 - Do not include citations — they live in the body sections.
 - Do not mention this tool or internal sources.
@@ -1310,47 +1320,37 @@ The full evaluation:
 
 
 def write_evaluation_summary(state: ResearchGraphState):
-    """Section 2 — written LAST; a glanceable three-column table distilled from
-    the finished evaluation: major assumptions, what we know, and what's
-    critical to figure out."""
+    """Section 2 — written LAST; the "Snapshot of the Evidence" table distilled
+    from the finished evaluation. Each row anchors what we know and what's
+    critical to figure out to one major assumption."""
     ps = state.get("path_spec") or {}
-    system_message = evaluation_summary_instructions.format(
+    system_message = evidence_snapshot_instructions.format(
         assumptions=_bullet_list(ps.get("charity_assumptions")),
         digest=_sections_digest(state, trim=None),
     )
-    assumptions: list[str] = []
-    known: list[str] = []
-    unknowns: list[str] = []
+    rows: list[list[str]] = []
     try:
-        res = cast(EvaluationSummaryContent, llm.with_structured_output(EvaluationSummaryContent).invoke([
+        res = cast(EvidenceSnapshotContent, llm.with_structured_output(EvidenceSnapshotContent).invoke([
             SystemMessage(content=system_message),
-            HumanMessage(content="Produce the three lists."),
+            HumanMessage(content="Produce the snapshot rows."),
         ]))
-        assumptions = [a for a in (res.assumptions or []) if str(a).strip()]
-        known = [k for k in (res.known or []) if str(k).strip()]
-        unknowns = [u for u in (res.critical_unknowns or []) if str(u).strip()]
+        rows = [
+            [r.assumption, r.known, r.critical]
+            for r in (res.rows or []) if (r.assumption or "").strip()
+        ]
     except Exception as e:
-        print(f"[write_evaluation_summary] structured summary failed: {e}")
+        print(f"[write_evaluation_summary] structured snapshot failed: {e}")
 
-    if not (assumptions or known or unknowns):
+    if not rows:
         summary = "The evaluation did not produce enough material to summarise; see the sections below."
     else:
-        depth = max(len(assumptions), len(known), len(unknowns))
-        rows = [
-            [
-                assumptions[i] if i < len(assumptions) else "",
-                known[i] if i < len(known) else "",
-                unknowns[i] if i < len(unknowns) else "",
-            ]
-            for i in range(depth)
-        ]
         summary = _render_md_table(
-            ["Major Assumptions the Intervention Is Built On", "What We Know", "What's Critical to Figure Out"],
+            ["Major Assumption the Intervention Is Built On", "What We Know", "What's Critical to Figure Out"],
             rows,
         )
     return {
         "evaluation_summary": summary,
-        "messages": [AIMessage(content="[PROGRESS:90] Wrote the evaluation summary.", name="System")],
+        "messages": [AIMessage(content="[PROGRESS:90] Wrote the snapshot of the evidence.", name="System")],
     }
 
 
@@ -1418,7 +1418,7 @@ def finalize_report(state: ResearchGraphState):
 
 ---
 
-## 2. Evaluation Summary
+## 2. Snapshot of the Evidence
 
 {summary}
 
@@ -1430,7 +1430,7 @@ def finalize_report(state: ResearchGraphState):
 
 ---
 
-## 4. Regulatory Environment
+## 4. Regulatory Environment for Nonprofits in India
 
 {regulatory}
 
