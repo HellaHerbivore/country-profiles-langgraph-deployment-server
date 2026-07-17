@@ -60,7 +60,7 @@ export function FeedbackWidget() {
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="What's stopping you from using Country Profiles again? What would bring you back to Country Profiles?"
+            placeholder="What's stopping you from using Tractability Assistant again? What would bring you back to Tractability Assistant?"
             rows={6}
             className="min-h-[140px]"
             disabled={status === "sending"}

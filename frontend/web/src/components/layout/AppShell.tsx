@@ -42,7 +42,7 @@ export function AppShell() {
               <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-4 text-sm text-foreground/80">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 <p>
-                  Country Profiles&rsquo; speed has not yet been optimized. Keep your phone awake
+                  Tractability Assistant&rsquo;s speed has not yet been optimized. Keep your phone awake
                   or this page alive for about 2&ndash;3 minutes while we surface the insights.
                 </p>
               </div>
