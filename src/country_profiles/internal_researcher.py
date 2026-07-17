@@ -773,6 +773,26 @@ def _bullet_list(items: list[str]) -> str:
     return "\n".join(f"- {i}" for i in items) if items else "(none provided)"
 
 
+def _md_table_cell(text) -> str:
+    """Flatten a value into a single markdown table cell: collapse whitespace,
+    neutralise pipes, and show an em-dash for empty cells."""
+    cell = " ".join(str(text or "").replace("|", "/").split())
+    return cell or "—"
+
+
+def _render_md_table(headers: list[str], rows: list[list[str]]) -> str:
+    """Render a markdown pipe table at the headers' width, padding short rows."""
+    width = len(headers)
+    lines = [
+        "| " + " | ".join(_md_table_cell(h) for h in headers) + " |",
+        "|" + " --- |" * width,
+    ]
+    for row in rows:
+        padded = (list(row) + [""] * width)[:width]
+        lines.append("| " + " | ".join(_md_table_cell(c) for c in padded) + " |")
+    return "\n".join(lines)
+
+
 def _llm_text(result) -> str:
     text = result.content
     if isinstance(text, list):
@@ -828,8 +848,34 @@ def _render_subsections(pairs: list[tuple[str, str]]) -> str:
 # ---------------------------------------------------------------------------
 # 5c. Section writers
 # ---------------------------------------------------------------------------
+# One row of the stated-work table: an activity and its own expected-outcome chain.
+class ActivityOutcomeRow(BaseModel):
+    activity: str = Field(description="One concrete activity the charity plans to carry out, stated briefly.")
+    outcomes: List[str] = Field(default_factory=list, description="The ordered chain of outcomes the charity expects to follow from THIS activity, earliest first. Each entry is one short phrase.")
+
+
+class StatedWorkContent(BaseModel):
+    impact_paragraph: str = Field(default="", description="A brief paragraph (1-3 sentences) stating the ultimate impact the charity is aiming at.")
+    rows: List[ActivityOutcomeRow] = Field(default_factory=list, description="One row per stated activity.")
+
+
+stated_work_instructions = """You are preparing the "Charity's Stated Work" snapshot of an evaluation: a glanceable, faithful restatement of what the charity put forward, with NO evaluation, judgement or recommendations.
+
+From the path details below, produce:
+- impact_paragraph: a brief paragraph (1-3 sentences) stating the ultimate impact the charity is aiming at. If no ultimate impact was stated, say plainly that the charity did not state one.
+- rows: one row per stated activity. For each activity, give the ordered chain of outcomes the charity expects to follow from THAT activity, earliest first. Use only outcomes the charity states or clearly implies; where several activities share the same expected outcomes, repeat them on each relevant row. Keep every activity and outcome to one short phrase. If no outcomes are tied to an activity, return an empty list for it.
+
+Use ONLY the details provided. Do not invent activities or outcomes, do not assess feasibility, do not cite sources, and do not mention this tool.
+
+PATH DETAILS:
+{details}"""
+
+
 def write_stated_work(state: ResearchGraphState):
-    """Section 1 — neutral restatement of the charity's path. No evaluation."""
+    """Section 1 — glanceable snapshot of the charity's path: the intended
+    ultimate impact as a brief paragraph, then an activities × expected-outcomes
+    table. Emitted into the stream as soon as it is ready (inside [STATED_WORK]
+    markers) so the user can read it while the rest of the report runs."""
     ps = state.get("path_spec") or {}
     details = (
         f"Summary: {ps.get('summary', '')}\n\n"
@@ -837,22 +883,54 @@ def write_stated_work(state: ResearchGraphState):
         f"Outputs:\n{_bullet_list(ps.get('outputs'))}\n\n"
         f"Expected chain of outcomes (earliest first):\n{_bullet_list(ps.get('outcome_chain'))}\n\n"
         f"Intended ultimate impact: {ps.get('final_impact', '') or '(not stated)'}\n\n"
-        f"Opportunities the charity flagged:\n{_bullet_list(ps.get('charity_flagged_opportunities'))}\n\n"
-        f"Assumptions the charity makes:\n{_bullet_list(ps.get('charity_assumptions'))}"
+        f"Original text (for attributing outcomes to activities):\n{(ps.get('raw_text') or '')[:4000]}"
     )
-    system_message = (
-        "You are writing the \"Charity's Stated Work\" section of an evaluation: a neutral, faithful "
-        "summary of what the charity put forward, with NO evaluation, judgement or recommendations. "
-        "Use only the details provided. Write in clear objective third-person prose (a short paragraph, "
-        "then concise bullet points for activities, the outcome chain and intended impact). Do not add "
-        "opinions, do not assess feasibility, do not cite sources, and do not mention this tool. "
-        "Do not include a section heading or title; start directly with the content."
-    )
-    result = llm.invoke([
-        SystemMessage(content=system_message),
-        HumanMessage(content=f"Write the section from these details:\n\n{details}"),
-    ])
-    return {"stated_work": _llm_text(result)}
+
+    impact_paragraph = ""
+    rows: list[list[str]] = []
+    try:
+        res = cast(StatedWorkContent, llm.with_structured_output(StatedWorkContent).invoke([
+            SystemMessage(content=stated_work_instructions.format(details=details)),
+            HumanMessage(content="Produce the impact paragraph and the activity rows."),
+        ]))
+        impact_paragraph = " ".join((res.impact_paragraph or "").split())
+        rows = [
+            [r.activity] + [o for o in (r.outcomes or []) if str(o).strip()]
+            for r in (res.rows or []) if (r.activity or "").strip()
+        ]
+    except Exception as e:
+        print(f"[write_stated_work] structured snapshot failed: {e}; falling back to the normalised path.")
+
+    if not rows:
+        chain = "; ".join(ps.get("outcome_chain") or [])
+        rows = [[a] + ([chain] if chain else []) for a in (ps.get("activities") or [])]
+    if not impact_paragraph:
+        impact_paragraph = (ps.get("final_impact") or "").strip() or (
+            "The charity did not state an ultimate impact for this path."
+        )
+
+    if rows:
+        outcome_cols = max(len(r) - 1 for r in rows)
+        headers = ["Activity", "First Expected Outcome"] + ["Then"] * max(outcome_cols - 1, 0)
+        table = _render_md_table(headers, rows)
+    else:
+        table = "No activities were stated in the submitted path."
+
+    section = f"**Intended ultimate impact:** {impact_paragraph}\n\n{table}"
+
+    return {
+        "stated_work": section,
+        "messages": [AIMessage(
+            # [STATED_WORK]…[/STATED_WORK] is sliced out of the stream by the
+            # frontend and rendered above the loading indicator while the rest
+            # of the report is still being generated.
+            content=(
+                "[PROGRESS:18] Summarised the charity's stated work — activities and expected outcomes.\n\n"
+                f"[STATED_WORK]\n{section}\n[/STATED_WORK]"
+            ),
+            name="System",
+        )],
+    }
 
 
 def write_methodology(state: ResearchGraphState):
@@ -1207,21 +1285,71 @@ def write_experts(state: ResearchGraphState):
     return {"experts_section": text}
 
 
+class EvaluationSummaryContent(BaseModel):
+    assumptions: List[str] = Field(default_factory=list, description="Major assumptions the intervention is built on. Each entry one short sentence.")
+    known: List[str] = Field(default_factory=list, description="What we know — the clearest findings the evaluation established. Each entry one short sentence.")
+    critical_unknowns: List[str] = Field(default_factory=list, description="What's critical to figure out — the open questions that most affect whether the path works. Each entry one short sentence.")
+
+
+evaluation_summary_instructions = """You are writing the "Evaluation Summary" of a theory-of-change evaluation — a glanceable digest of the finished evaluation, structured as three lists:
+- assumptions: the major assumptions the intervention is built on (stated by the charity or surfaced by the evaluation).
+- known: what we know — the clearest findings the evaluation established, favouring points well supported by the sections below.
+- critical_unknowns: what's critical to figure out — the open questions and gaps that most affect whether the path can work.
+
+Rules:
+- 3-6 entries per list, each ONE short, self-contained sentence, most important first.
+- Draw only on the evaluation sections provided; do not introduce new claims.
+- Do not include citations — they live in the body sections.
+- Do not mention this tool or internal sources.
+
+The charity's stated assumptions (fold in the ones that matter):
+{assumptions}
+
+The full evaluation:
+{digest}"""
+
+
 def write_evaluation_summary(state: ResearchGraphState):
-    """Section 2 — written LAST; leans on everything else."""
-    system_message = (
-        "You are writing the \"Evaluation Summary\" — a concise wrap-up of the evaluation's findings for "
-        "this single path. Pull together the most important points from the sections below: the regulatory "
-        "picture, how relevant and feasible the path looks, the main opportunities, the main challenges and "
-        "what is known about the method's effectiveness, the team picture, and the biggest open questions. "
-        "Be balanced and concrete, a few short paragraphs. Do not introduce new claims or citations that are "
-        "not already in the sections. Do not mention this tool or internal sources. "
-        "Do not include a section heading; start directly with the summary."
+    """Section 2 — written LAST; a glanceable three-column table distilled from
+    the finished evaluation: major assumptions, what we know, and what's
+    critical to figure out."""
+    ps = state.get("path_spec") or {}
+    system_message = evaluation_summary_instructions.format(
+        assumptions=_bullet_list(ps.get("charity_assumptions")),
+        digest=_sections_digest(state, trim=None),
     )
-    human = f"The full evaluation:\n\n{_sections_digest(state, trim=None)}"
-    result = llm.invoke([SystemMessage(content=system_message), HumanMessage(content=human)])
+    assumptions: list[str] = []
+    known: list[str] = []
+    unknowns: list[str] = []
+    try:
+        res = cast(EvaluationSummaryContent, llm.with_structured_output(EvaluationSummaryContent).invoke([
+            SystemMessage(content=system_message),
+            HumanMessage(content="Produce the three lists."),
+        ]))
+        assumptions = [a for a in (res.assumptions or []) if str(a).strip()]
+        known = [k for k in (res.known or []) if str(k).strip()]
+        unknowns = [u for u in (res.critical_unknowns or []) if str(u).strip()]
+    except Exception as e:
+        print(f"[write_evaluation_summary] structured summary failed: {e}")
+
+    if not (assumptions or known or unknowns):
+        summary = "The evaluation did not produce enough material to summarise; see the sections below."
+    else:
+        depth = max(len(assumptions), len(known), len(unknowns))
+        rows = [
+            [
+                assumptions[i] if i < len(assumptions) else "",
+                known[i] if i < len(known) else "",
+                unknowns[i] if i < len(unknowns) else "",
+            ]
+            for i in range(depth)
+        ]
+        summary = _render_md_table(
+            ["Major Assumptions the Intervention Is Built On", "What We Know", "What's Critical to Figure Out"],
+            rows,
+        )
     return {
-        "evaluation_summary": _llm_text(result),
+        "evaluation_summary": summary,
         "messages": [AIMessage(content="[PROGRESS:90] Wrote the evaluation summary.", name="System")],
     }
 

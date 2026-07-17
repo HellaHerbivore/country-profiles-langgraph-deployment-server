@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 export function LoadingState() {
   const { state } = useResearchContext();
-  const { progress, status, logs, topic } = state;
+  const { progress, status, logs, topic, statedWorkHtml } = state;
   const logViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,6 +26,24 @@ export function LoadingState() {
         </div>
         <div className="mt-1 break-words text-sm font-medium text-foreground">{topic}</div>
       </div>
+
+      {/* Early snapshot: the charity's stated work streams in ahead of the
+          rest of the report, so it can be read while the evaluation runs.
+          The loading indication stays below it. */}
+      {statedWorkHtml && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
+            Charity&rsquo;s Stated Work
+          </div>
+          <div
+            className="report-prose mt-2 text-[0.95rem]"
+            dangerouslySetInnerHTML={{ __html: statedWorkHtml }}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            The full evaluation is still being generated below.
+          </p>
+        </div>
+      )}
 
       {/* Progress */}
       <div className="flex flex-col gap-2">

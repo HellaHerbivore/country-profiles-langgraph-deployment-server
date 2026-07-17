@@ -167,6 +167,7 @@ export type StreamCallbacks = {
   onLog?: (text: string) => void;
   onStatus?: (text: string) => void;
   onLayersBriefing?: (jsonStr: string) => void;
+  onStatedWork?: (markdown: string) => void;
   onContent?: (fullContent: string) => void;
 };
 
@@ -221,6 +222,7 @@ export async function streamResearch(
 
   let fullContent = "";
   let layersBriefingSent = false;
+  let statedWorkSent = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -258,6 +260,30 @@ export async function streamResearch(
           if (event.text.includes("ABORTED")) {
             callbacks.onStatus?.("Research aborted - not enough data");
             callbacks.onLog?.("Aborted: not enough internal knowledge");
+          }
+        }
+
+        // Check accumulated content for the early stated-work snapshot, which
+        // the backend emits as soon as the charity's path has been read so it
+        // can be shown while the rest of the report is still generating.
+        if (!statedWorkSent) {
+          const startMarker = "[STATED_WORK]";
+          const endMarker = "[/STATED_WORK]";
+          const startIdx = fullContent.indexOf(startMarker);
+          if (startIdx !== -1) {
+            const endIdx = fullContent.indexOf(endMarker, startIdx + startMarker.length);
+            if (endIdx !== -1) {
+              const markdown = fullContent
+                .slice(startIdx + startMarker.length, endIdx)
+                .trim();
+              statedWorkSent = true;
+              callbacks.onStatedWork?.(markdown);
+              callbacks.onLog?.("Charity's stated work received");
+              fullContent =
+                fullContent.slice(0, startIdx) +
+                fullContent.slice(endIdx + endMarker.length);
+            }
+            // End marker not seen yet — keep accumulating
           }
         }
 

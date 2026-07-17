@@ -143,6 +143,22 @@
     @apply font-mono text-[0.9em] bg-muted px-[0.4em] py-[0.15em] rounded-sm;
   }
 
+  .report-prose .table-wrap {
+    @apply my-4 mb-6 w-full overflow-x-auto;
+  }
+
+  .report-prose table {
+    @apply w-full border-collapse text-[0.9em] leading-snug;
+  }
+
+  .report-prose th {
+    @apply border border-border bg-muted/60 px-3 py-2 text-left align-top font-semibold;
+  }
+
+  .report-prose td {
+    @apply border border-border px-3 py-2 text-left align-top;
+  }
+
   /* Layer shimmer (loading state) */
   .layer-shimmer {
     background: linear-gradient(

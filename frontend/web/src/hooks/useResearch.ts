@@ -24,6 +24,7 @@ type Action =
   | { type: "PROGRESS"; percent: number; statusText: string }
   | { type: "ABORT"; statusText: string }
   | { type: "LAYERS_BRIEFING"; briefing: LayersBriefing }
+  | { type: "STATED_WORK"; html: string }
   | { type: "REPORT_READY"; html: string }
   | { type: "NO_REPORT" }
   | { type: "ERROR"; message: string; sessionExpired?: boolean }
@@ -67,6 +68,8 @@ function reducer(state: ResearchState, action: Action): ResearchState {
         layersLoading: false,
         layersBriefing: action.briefing,
       };
+    case "STATED_WORK":
+      return { ...state, statedWorkHtml: action.html };
     case "REPORT_READY":
       return {
         ...state,
@@ -215,6 +218,9 @@ export function useResearch() {
               } catch (e) {
                 console.error("Failed to parse layers briefing:", e);
               }
+            },
+            onStatedWork: (markdown) => {
+              dispatch({ type: "STATED_WORK", html: markdownToHtml(markdown) });
             },
             onContent: () => {
               /* handled via accumulated fullContent below */

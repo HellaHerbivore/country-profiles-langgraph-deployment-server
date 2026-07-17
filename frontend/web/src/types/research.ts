@@ -26,6 +26,7 @@ export type ResearchState = {
   logs: string[];
   layersBriefing: LayersBriefing | null;
   layersLoading: boolean;
+  statedWorkHtml: string;
   reportHtml: string;
   error: string | null;
 };
@@ -38,6 +39,7 @@ export const initialResearchState: ResearchState = {
   logs: [],
   layersBriefing: null,
   layersLoading: false,
+  statedWorkHtml: "",
   reportHtml: "",
   error: null,
 };
