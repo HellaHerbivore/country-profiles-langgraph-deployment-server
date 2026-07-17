@@ -24,7 +24,7 @@ export const SOURCES: readonly Source[] = [
   {
     id: "stray-dog-regional-advisory-panel",
     label: "Stray Dog Regional Advisory Panel",
-    defaultChecked: true,
+    defaultChecked: false,
     storeKey: "onground_advocate",
     comingSoon: false,
   },

@@ -1229,6 +1229,38 @@ def write_evaluation_summary(state: ResearchGraphState):
 # ---------------------------------------------------------------------------
 # 5d. Finalize Report (fixed 11-section layout)
 # ---------------------------------------------------------------------------
+def _make_report_title(state: ResearchGraphState) -> str:
+    """A concise title naming the intervention(s) this report evaluates."""
+    path_spec = state.get("path_spec") or {}
+    descriptor = (path_spec.get("method_descriptor") or "").strip()
+    summary = (path_spec.get("summary") or "").strip()
+
+    phrase = ""
+    if descriptor or summary:
+        try:
+            result = llm.invoke([
+                SystemMessage(content=(
+                    "You name evaluation reports. Reply with only a short Title Case phrase "
+                    "(3-8 words) naming the charity intervention(s) described, e.g. "
+                    "'Corporate Cage-Free Commitments' or 'Stray Dog Sterilisation Programmes'. "
+                    "No quotes, no markdown, no trailing punctuation."
+                )),
+                HumanMessage(content=(
+                    f"Kind of intervention: {descriptor or '(not stated)'}\n\n"
+                    f"What the charity proposes: {summary[:1500] or '(not stated)'}"
+                )),
+            ])
+            phrase = _llm_text(result).strip().strip('"').strip()
+            phrase = phrase.splitlines()[0].strip() if phrase else ""
+        except Exception as e:
+            print(f"[finalize_report] title generation failed: {e}")
+        if not phrase:
+            phrase = descriptor
+    if phrase and len(phrase) <= 80:
+        return f"Tractability Evaluation: {phrase}"
+    return "Theory of Change Evaluation"
+
+
 def finalize_report(state: ResearchGraphState):
     stated_work = state.get("stated_work", "")
     summary = state.get("evaluation_summary", "")
@@ -1250,7 +1282,7 @@ def finalize_report(state: ResearchGraphState):
                     all_sources.add(one.strip())
     sources_list = "\n".join(f"- {s}" for s in sorted(all_sources)) if all_sources else "- No sources were cited."
 
-    final_report_str = f"""# Theory of Change Evaluation
+    final_report_str = f"""# {_make_report_title(state)}
 
 ## 1. Charity's Stated Work
 
@@ -1319,7 +1351,9 @@ def finalize_report(state: ResearchGraphState):
     return {
         "final_report": final_report_str,
         "messages": [AIMessage(
-            content=f"[PROGRESS:100] Evaluation complete.\n\n{final_report_str}",
+            # [FINAL_REPORT] is the marker the frontend slices on to find the
+            # report in the stream, now that the title line is dynamic.
+            content=f"[PROGRESS:100] Evaluation complete.\n\n[FINAL_REPORT]\n{final_report_str}",
             name="System",
         )]
     }

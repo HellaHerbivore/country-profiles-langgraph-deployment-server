@@ -289,13 +289,23 @@ export async function streamResearch(
 
 // ── Extract Report ──
 export function extractReport(fullContent: string): string {
-  const briefingMarker = "# Theory of Change Evaluation";
+  // The backend emits [FINAL_REPORT] just before the report, whose title line
+  // is dynamic. The legacy title marker covers older backend deployments.
+  const finalMarker = "[FINAL_REPORT]";
+  const legacyMarker = "# Theory of Change Evaluation";
 
   let report = "";
 
-  const briefingIdx = fullContent.lastIndexOf(briefingMarker);
-  if (briefingIdx !== -1) {
-    report = fullContent.slice(briefingIdx).trim();
+  const finalIdx = fullContent.lastIndexOf(finalMarker);
+  if (finalIdx !== -1) {
+    report = fullContent.slice(finalIdx + finalMarker.length).trim();
+  }
+
+  if (!report) {
+    const legacyIdx = fullContent.lastIndexOf(legacyMarker);
+    if (legacyIdx !== -1) {
+      report = fullContent.slice(legacyIdx).trim();
+    }
   }
 
   if (!report && fullContent.length > 100) {

@@ -108,7 +108,7 @@ export function BottomBar({ selectedStores }: BottomBarProps) {
             rows={1}
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder="Start typing, or attach a document..."
+            placeholder="Attach a theory of change or ask about the tractability of an intervention in India"
             disabled={disabled}
             className="min-h-[3.5rem] min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-3 py-4 text-sm leading-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             onKeyDown={(e) => {
