@@ -43,20 +43,58 @@ Two properties of the stack drive the bill:
 `langgraph dev`/`langgraph build` deployments behave identically. In the
 custom Dockerfile deployment the env vars are what count.
 
-**One-time cleanup:** the TTL only helps going forward, and pre-existing
-threads may not be picked up by the sweeper. Clear the backlog once via the
-API (repeat until empty):
+### One-time backlog cleanup
 
-```bash
-# List old threads, then delete each one (runs + checkpoints cascade)
-curl -s -X POST "$SERVER_URL/threads/search" -H "x-api-key: $KEY" \
-  -H 'Content-Type: application/json' -d '{"limit": 100}' |
-  jq -r '.[].thread_id' |
-  xargs -I{} curl -s -X DELETE "$SERVER_URL/threads/{}" -H "x-api-key: $KEY"
+The TTL only reliably covers threads created after it deploys (expiry is
+stamped per thread), so clear the pre-existing backlog once by hand in the
+Neon console's **SQL Editor**. The production proxy authenticates with
+short-lived Clerk JWTs, which makes bulk deletion through the REST API
+impractical — SQL is the right tool here.
+
+**1. See what's there** (also confirms the table names in your schema —
+LangGraph's state lives in tables named like `thread`, `run`, `checkpoints`,
+`checkpoint_blobs`, `checkpoint_writes`):
+
+```sql
+SELECT relname AS table, pg_size_pretty(pg_total_relation_size(relid)) AS size
+FROM pg_statio_user_tables
+ORDER BY pg_total_relation_size(relid) DESC
+LIMIT 15;
 ```
 
-or in SQL (Neon console → SQL Editor):
-`DELETE FROM thread WHERE updated_at < now() - interval '30 days';`
+**2a. Full wipe (recommended)** — nothing in the app ever re-reads old
+threads, so the simplest option is to clear all agent state. Run it at a
+quiet moment: it also removes any run currently in flight.
+
+```sql
+TRUNCATE TABLE checkpoint_writes, checkpoint_blobs, checkpoints, run, thread CASCADE;
+```
+
+TRUNCATE releases the disk space immediately (no vacuum needed).
+
+**2b. Age-based alternative** — keep the last 30 days. The explicit `::text`
+casts make the joins work whether `thread_id` is stored as uuid or text:
+
+```sql
+BEGIN;
+CREATE TEMP TABLE stale AS
+  SELECT thread_id::text AS tid FROM thread
+  WHERE updated_at < now() - interval '30 days';
+DELETE FROM checkpoint_writes WHERE thread_id::text IN (SELECT tid FROM stale);
+DELETE FROM checkpoint_blobs  WHERE thread_id::text IN (SELECT tid FROM stale);
+DELETE FROM checkpoints       WHERE thread_id::text IN (SELECT tid FROM stale);
+DELETE FROM run               WHERE thread_id::text IN (SELECT tid FROM stale);
+DELETE FROM thread            WHERE thread_id::text IN (SELECT tid FROM stale);
+COMMIT;
+```
+
+Unlike TRUNCATE, DELETE leaves dead rows behind; autovacuum reclaims them
+over the following hours, so the storage graph lags the cleanup.
+
+**3. Verify**: rerun the size query from step 1, and load the app and run a
+quick report to confirm normal operation. Note the freed data remains in the
+instant-restore (WAL) history until the restore window passes, so the billed
+storage settles fully only after that window.
 
 ## Settings to check in the Neon console
 
