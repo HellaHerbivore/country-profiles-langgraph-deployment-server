@@ -18,6 +18,17 @@ ENV LANGSERVE_GRAPHS='{"country_profiles": "/deps/deploy-langgraph-server-auth/s
 
 ENV PYTHONPATH="/deps/deploy-langgraph-server-auth:/api"
 
+# -- NeonDB cost controls (defaults; override per-environment on Render) --
+# Threads are write-once here (the frontend never reopens old ones), so delete
+# them 30 days after last activity or checkpoint/run storage grows forever.
+ENV LANGGRAPH_THREAD_TTL='{"strategy":"delete","default_ttl":43200,"sweep_interval_minutes":60}'
+# This deployment defines no LangGraph crons; without this flag the scheduler
+# polls Postgres every 5s for the whole uptime, keeping Neon compute awake.
+ENV FF_CRONS_ENABLED=false
+# Default pool cap is 150 connections per replica — far more than one
+# low-traffic replica needs against a 0.25 CU Neon compute.
+ENV LANGGRAPH_POSTGRES_POOL_MAX_SIZE=10
+
 # -- Ensure user deps didn't inadvertently overwrite langgraph-api
 RUN mkdir -p /api/langgraph_api /api/langgraph_runtime /api/langgraph_license && \
     touch /api/langgraph_api/__init__.py /api/langgraph_runtime/__init__.py /api/langgraph_license/__init__.py
