@@ -78,10 +78,21 @@ that tells you which of the following matters most.
    With the LangGraph server polling 24/7 it will rarely trigger, but it costs
    nothing and covers deploys/outages; the app's `wakeUpServer()` retry logic
    tolerates the ~500 ms first-query wake.
-3. **Instant restore / history retention** (Project settings → Instant
-   restore): the retained WAL is billed as extra storage. Default is 1 day on
-   paid plans. This database holds ephemeral agent state you would never
-   point-in-time-restore, so drop the window to a few hours (or the minimum).
+3. **Instant restore / history retention**: the retained WAL is billed as
+   extra storage. Default is 1 day on paid plans. This database holds
+   ephemeral agent state you would never point-in-time-restore, so drop the
+   window to a few hours. In the console it's on the project's
+   **Settings → Instant restore** page (a slider; some console versions show
+   it on the **Backup & Restore** page as the "restore window"/"history
+   window", and org members may need admin rights to see it). If the UI
+   doesn't surface it, set it via the API — this always works:
+
+   ```bash
+   curl -X PATCH "https://console.neon.tech/api/v2/projects/$PROJECT_ID" \
+     -H "Authorization: Bearer $NEON_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"project": {"history_retention_seconds": 21600}}'   # 6 hours
+   ```
 4. **Branches**: delete stale branches. Child branches accrue their own
    storage, and any branch with its own compute bills compute too.
 5. **Plan**: compare Launch (~$0.106/CU-hour) vs Scale (~$0.222/CU-hour) rates
