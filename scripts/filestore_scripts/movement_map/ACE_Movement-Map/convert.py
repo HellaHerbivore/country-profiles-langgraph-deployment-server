@@ -1,5 +1,5 @@
 """Convert the ACE Movement Map spreadsheet (CSV export) into per-organization
-Markdown documents plus an upload manifest.
+Markdown documents plus an upload manifest for the ACE_Movement-Map collection.
 
 Why one document per organization: Gemini File Search chunks documents with a
 whitespace/token splitter that ignores row boundaries, so uploading the raw CSV
@@ -7,24 +7,33 @@ whitespace/token splitter that ignores row boundaries, so uploading the raw CSV
 "Organization" cell that gives the row meaning. Chunks never span document
 boundaries, so emitting one small self-contained document per org makes
 cross-org misattribution structurally impossible: every row here fits inside a
-single chunk (see chunking_config in upload_movement_map.py).
+single chunk (see chunking_config in upload_profiles.py).
 
 This script is stdlib-only on purpose — it needs no API key or google-genai
 install, so the confidential CSV can be converted anywhere.
 
 Usage:
-    python convert_movement_map.py --csv /path/to/movement_map.csv \
-        --out ../../../data/movement_map
+    python convert.py --csv /path/to/movement_map.csv \
+        --out ../../../../data/ACE_Movement-Map
 """
 
 import argparse
 import csv
-import json
-import re
 import sys
-import unicodedata
-from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # movement_map/ shared helpers
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src" / "country_profiles"))
+from common import (  # noqa: E402
+    METADATA_VALUE_MAX_CHARS, clean, clean_list, dedupe_slug, slugify,
+    warn_if_oversized, write_manifest,
+)
+from intervention_tags import INTERVENTION_TAGS  # noqa: E402
+
+# Citations render as the display_name, so this prefix is user-facing text.
+DISPLAY_PREFIX = "ACE Movement Map - "
+SOURCE_LABEL = "ACE Movement Map 2026"
+MANIFEST_FILENAME = "ace_movement_map_manifest.json"
 
 # Source CSV column headers (exact strings from the sheet)
 COL_ORG = "Organization"
@@ -65,36 +74,42 @@ METADATA_FIELDS = [
     (COL_ACE, "ace_history"),
 ]
 
-# Gemini custom metadata string values are capped; stay safely under the limit.
-METADATA_VALUE_MAX_CHARS = 250
-
-# Sheet placeholders that mean "no value"
-ABSENT_VALUES = {"", "[no website found]", "n/a", "na", "-"}
-
-
-def clean(value: str | None) -> str:
-    """Strip and normalize whitespace; return '' for placeholder non-values."""
-    if value is None:
-        return ""
-    text = re.sub(r"[ \t]+", " ", value.replace("\r", "")).strip()
-    if text.lower() in ABSENT_VALUES:
-        return ""
-    return text
+# ACE's interventions menu and the tag legend both derive from the State of the
+# Movement survey, so most menu values equal a tag's label (with or without the
+# "Category — " prefix); those map automatically below. Menu values that don't
+# line up textually get an explicit alias here (menu value -> tag code).
+# Values that still match nothing are reported at the end of the run.
+MENU_TAG_ALIASES: dict[str, str] = {}
 
 
-def clean_list(value: str | None) -> str:
-    """Normalize a comma-separated menu field (collapses doubled spaces after commas)."""
-    text = clean(value)
+def _tag_alias_table() -> dict[str, tuple[str, ...]]:
+    """tag code -> lowercase text fragments whose presence in the interventions
+    cell means the org carries that tag."""
+    table: dict[str, list[str]] = {}
+    for code, label in INTERVENTION_TAGS.items():
+        aliases = [label.casefold()]
+        if " — " in label:
+            aliases.append(label.split(" — ", 1)[1].casefold())
+        table[code] = aliases
+    for menu_value, code in MENU_TAG_ALIASES.items():
+        table[code].append(menu_value.casefold())
+    return {code: tuple(aliases) for code, aliases in table.items()}
+
+
+TAG_ALIASES = _tag_alias_table()
+
+
+def interventions_to_tags(interventions_text: str, unmatched: set[str]) -> list[str]:
+    """Tag codes whose label (or alias) appears in the free-text interventions
+    cell. Substring scan rather than a split — the menu labels themselves
+    contain commas, so the cell cannot be split reliably."""
+    text = interventions_text.casefold()
     if not text:
-        return ""
-    parts = [p.strip() for p in re.split(r",\s*", text) if p.strip()]
-    return ", ".join(parts)
-
-
-def slugify(name: str, max_len: int = 80) -> str:
-    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
-    return slug[:max_len].strip("-") or "org"
+        return []
+    codes = [code for code, aliases in TAG_ALIASES.items() if any(a in text for a in aliases)]
+    if not codes:
+        unmatched.add(interventions_text)
+    return codes
 
 
 LIST_COLUMNS = {COL_ANIMALS, COL_INTERVENTIONS, COL_REGIONS}
@@ -126,12 +141,16 @@ def build_markdown(fields: dict) -> str:
     return "\n".join(lines)
 
 
-def build_metadata(fields: dict) -> dict:
+def build_metadata(fields: dict, unmatched_interventions: set[str]) -> dict:
     meta = {}
     for col, key in METADATA_FIELDS:
         value = fields.get(col, "")
         if value:
             meta[key] = value[:METADATA_VALUE_MAX_CHARS]
+    tags = interventions_to_tags(fields.get(COL_INTERVENTIONS, ""), unmatched_interventions)
+    if tags:
+        meta["intervention_tags"] = tags  # list -> string_list_value at upload
+    meta["source"] = SOURCE_LABEL
     return meta
 
 
@@ -146,6 +165,7 @@ def convert(csv_path: Path, out_dir: Path) -> dict:
 
     seen_names: set[str] = set()
     seen_slugs: dict[str, int] = {}
+    unmatched_interventions: set[str] = set()
     documents = []
     skipped = 0
 
@@ -162,43 +182,37 @@ def convert(csv_path: Path, out_dir: Path) -> dict:
                      "dedupe the sheet and re-run.")
         seen_names.add(org)
 
-        slug = slugify(org)
-        if slug in seen_slugs:
-            seen_slugs[slug] += 1
-            slug = f"{slug}-{seen_slugs[slug]}"
-        else:
-            seen_slugs[slug] = 1
-
+        slug = dedupe_slug(slugify(org), seen_slugs)
         filename = f"{slug}.md"
-        (out_dir / filename).write_text(build_markdown(fields), encoding="utf-8")
+        markdown = build_markdown(fields)
+        warn_if_oversized(org, markdown)
+        (out_dir / filename).write_text(markdown, encoding="utf-8")
         documents.append({
             "file": filename,
-            "display_name": f"Movement Map - {org}.md",
-            "custom_metadata": build_metadata(fields),
+            "display_name": f"{DISPLAY_PREFIX}{org}.md",
+            "custom_metadata": build_metadata(fields, unmatched_interventions),
         })
 
-    manifest = {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "source_csv": csv_path.name,
-        "expected_count": len(documents),
-        "documents": documents,
-    }
-    manifest_path = out_dir / "movement_map_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    manifest_path = write_manifest(out_dir, MANIFEST_FILENAME, csv_path, documents)
 
     print(f"✅ Wrote {len(documents)} org profiles to {out_dir}")
     if skipped:
         print(f"⚠️  Skipped {skipped} row(s) with no organization name")
+    if unmatched_interventions:
+        print(f"⚠️  {len(unmatched_interventions)} interventions cell(s) matched no tag code — "
+              "add entries to MENU_TAG_ALIASES and re-run. Distinct values:")
+        for value in sorted(unmatched_interventions):
+            print(f"     {value!r}")
     print(f"✅ Manifest: {manifest_path}")
-    return manifest
+    return {"documents": documents, "manifest_path": manifest_path}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Convert the Movement Map CSV into per-org Markdown + upload manifest")
-    parser.add_argument("--csv", type=Path, required=True, help="Path to the Movement Map CSV export")
+        description="Convert the ACE Movement Map CSV into per-org Markdown + upload manifest")
+    parser.add_argument("--csv", type=Path, required=True, help="Path to the ACE Movement Map CSV export")
     parser.add_argument("--out", type=Path,
-                        default=Path(__file__).resolve().parents[3] / "data" / "movement_map",
-                        help="Output directory (default: <repo>/data/movement_map, gitignored)")
+                        default=Path(__file__).resolve().parents[4] / "data" / "ACE_Movement-Map",
+                        help="Output directory (default: <repo>/data/ACE_Movement-Map, gitignored)")
     args = parser.parse_args()
     convert(args.csv, args.out)

@@ -44,7 +44,7 @@ export const SOURCES: readonly Source[] = [
   },
   {
     id: "movement-map",
-    label: "Movement Map",
+    label: "Movement Map (ACE + Stray Dog Institute)",
     defaultChecked: true,
     storeKey: "movement_map",
     comingSoon: false,

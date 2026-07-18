@@ -14,7 +14,8 @@ ON_GROUND_ADVOCATE_STORE = "fileSearchStores/onground-advocate-sources-y9falvyy9
 LOCAL_ACADEMIC_STORE = "fileSearchStores/local-academic-sources-cxae72dsk44n"
 GOI_PIB_STORE = "fileSearchStores/governmentofindiapressinfor-7wwkcyy8ijd9"
 REGULATORY_ENVIRONMENT_STORE = "fileSearchStores/regulatory-environment-o2q9s4tpmr2g"
-# ACE Movement Map 2026 (per-organization profiles)
+# Movement maps (per-organization profiles): ACE Movement Map 2026 +
+# Stray Dog Institute India Partner Directory, two collections in one store
 MOVEMENT_MAP_STORE = "fileSearchStores/movement-map-jzf154g2op6j"
 
 def get_client():

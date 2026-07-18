@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import json
 import base64
 import operator
@@ -16,6 +17,11 @@ from langgraph.graph import END, START, StateGraph
 import time
 from google import genai
 from google.genai import types, errors
+
+# The graph is loaded by file path (see langgraph.json), not as a package, so
+# sibling modules are imported the same way.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from intervention_tags import INTERVENTION_TAGS, build_tag_filter  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 1. Setup and Keys
@@ -47,7 +53,7 @@ STORE_REGISTRY = {
     "local_academic": (LOCAL_ACADEMIC_STORE, "India-based academic research sources."),
     "goi_pib": (GOI_PIB_STORE, "Government of India PIB press releases (Ministry of Fisheries, Animal Husbandry & Dairying)."),
     "regulatory_environment": (REGULATORY_ENVIRONMENT_STORE, "ICNL Civic Freedom Monitor — India's legal/regulatory environment for civil society (NGO registration, FCRA foreign-funding rules, and barriers to formation, operations, resources, expression and assembly)."),
-    "movement_map": (MOVEMENT_MAP_STORE, "ACE Movement Map 2026 — one profile per animal-advocacy organisation worldwide (~950 orgs): country of registration, regions of operation, animals helped, interventions used, budget tier, recent major funders, and ACE evaluation history."),
+    "movement_map": (MOVEMENT_MAP_STORE, "Movement maps — two collections of animal-advocacy organisation profiles: the ACE Movement Map 2026 (worldwide, ~950 orgs: country of registration, regions of operation, animals helped, interventions used, budget tier, recent major funders, ACE evaluation history) and the Stray Dog Institute India Partner Directory (~68 India orgs and India programs of international orgs: role in movement, movement position, intervention tags, status, location)."),
 }
 
 # Default selection until user-driven selection is wired in.
@@ -67,7 +73,7 @@ DATA_SOURCE_DESCRIPTIONS = {
     "goi_pib": "Government of India press information (Ministry of Fisheries, Animal Husbandry & Dairying)",
     "onground_advocate": "commentary from the Stray Dog Regional Advisory Panel",
     "regulatory_environment": "the regulatory and legal environment for civil society (ICNL Civic Freedom Monitor)",
-    "movement_map": "a map of the global animal-advocacy ecosystem (organisation profiles: focus, interventions, budgets and funders)",
+    "movement_map": "maps of the animal-advocacy ecosystem (ACE's global organisation profiles and Stray Dog Institute's India partner directory: focus, interventions, budgets and funders)",
 }
 
 # ---------------------------------------------------------------------------
@@ -543,6 +549,10 @@ EVAL_DIMENSIONS = [
         "key": "team_players",
         "label": "Existing players doing similar work",
         "stores": ["movement_map", "onground_advocate", "local_academic", "goi_pib"],
+        # Supplement semantic retrieval with an exact intervention-tag metadata
+        # filter over the movement map — tag equality catches "same intervention"
+        # orgs whose profiles aren't semantically close to the path text.
+        "tag_filtered": True,
         "brief": "Organisations, coalitions, government bodies or individuals already doing work similar to this charity's path in India, and what the evidence says they are currently doing — including organisations registered in or operating in India, and international organisations using similar interventions or helping the same animal groups.",
     },
     {
@@ -576,6 +586,78 @@ def route_to_dimensions(state: ResearchGraphState):
         Send("gather_evidence", {"dimension": dim, "path_brief": brief, "selected_stores": selected})
         for dim in EVAL_DIMENSIONS
     ]
+
+
+class InterventionTagPick(BaseModel):
+    """Intervention-tag codes matching a charity's proposed activities."""
+    codes: List[str] = Field(
+        description="1-4 codes from the intervention tag legend that best describe the charity's proposed interventions."
+    )
+
+
+_TAG_LEGEND = "\n".join(f"{code}: {label}" for code, label in INTERVENTION_TAGS.items())
+
+
+def _select_intervention_tags(path_brief: str) -> List[str]:
+    """Classify the charity's path into 1-4 taxonomy codes for the movement-map
+    metadata filter."""
+    picker = llm.with_structured_output(InterventionTagPick)
+    result = picker.invoke([
+        SystemMessage(content=(
+            "Classify a charity's proposed activities against an intervention-tag legend. "
+            "Return only codes that appear in the legend.\n\nLEGEND:\n" + _TAG_LEGEND
+        )),
+        HumanMessage(content=(
+            f"The charity's proposed path:\n{path_brief}\n\n"
+            "Pick the 1-4 codes that best describe the interventions it plans to use."
+        )),
+    ])
+    codes = [c for c in (result.codes if result else []) if c in INTERVENTION_TAGS]
+    return codes[:4]
+
+
+def _tag_filtered_movement_scan(path_brief: str, expert_instructions: str) -> tuple[str, list]:
+    """Supplementary movement-map-only retrieval filtered by intervention tag.
+
+    Runs ONLY against the movement-map store: a metadata_filter applies to every
+    store in a File Search call, and no other store carries intervention_tags
+    metadata — a shared call would filter the other stores down to nothing.
+    Any failure degrades to no supplement; the main retrieval stands alone.
+    """
+    try:
+        codes = _select_intervention_tags(path_brief)
+        if not codes:
+            return "", []
+        metadata_filter = build_tag_filter(codes)
+        print(f"[gather_evidence] tag-filtered movement-map scan: {codes}")
+        labels = "; ".join(INTERVENTION_TAGS[c] for c in codes)
+        prompt = (
+            f"The charity's proposed path is:\n{path_brief}\n\n"
+            f"The files provided are organisation profiles pre-filtered to those tagged with the "
+            f"intervention(s): {labels}. List the organisations these files describe and, for each, "
+            "what its profile says it does that is relevant to the charity's path. Report only what "
+            "the files contain; if nothing is relevant, say so using the exact phrase from the rules."
+        )
+        response = gemini_client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=expert_instructions,
+                tools=[types.Tool(file_search=types.FileSearch(
+                    file_search_store_names=[MOVEMENT_MAP_STORE],
+                    metadata_filter=metadata_filter,
+                ))],
+                temperature=0.0,
+            ),
+        )
+        text = (response.text or "").strip()
+        sources = _extract_consulted_sources(response)
+        if not text or "do not contain this information" in text.lower() or not sources:
+            return "", []
+        return f"Organisations matched by intervention tag ({', '.join(codes)}):\n{text}", sources
+    except Exception as e:
+        print(f"[gather_evidence] tag-filtered scan failed (non-fatal): {e}")
+        return "", []
 
 
 def gather_evidence(state: ResearchGraphState):
@@ -678,6 +760,13 @@ CRITICAL RULES:
 
     no_knowledge = (not used_files) or ("do not contain this information" in answer_text.lower())
     memo = "" if no_knowledge else answer_text
+
+    if dimension.get("tag_filtered") and "movement_map" in store_keys:
+        tag_memo, tag_sources = _tag_filtered_movement_scan(path_brief, expert_instructions)
+        if tag_memo:
+            memo = f"{memo}\n\n{tag_memo}" if memo else tag_memo
+            consulted_sources = consulted_sources + [s for s in tag_sources if s not in consulted_sources]
+            no_knowledge = False
 
     formatted_sources = _format_source_names(consulted_sources)
     if no_knowledge:

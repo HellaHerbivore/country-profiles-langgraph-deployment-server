@@ -1,15 +1,24 @@
-"""Upload the converted Movement Map org profiles to the "Movement Map"
-Gemini File Search store, manifest-driven and in parallel.
+"""Upload converted Movement Map org profiles to the shared "Movement Map"
+Gemini File Search store, manifest-driven and in parallel. Serves both
+collections — point --manifest at the output of either converter
+(ACE_Movement-Map/convert.py or Stray-Dog-Institute_Movement-Map/convert.py).
 
-Row-integrity design (see convert_movement_map.py): one document per org, plus
-an explicit chunking_config sized so every profile (max ~400 tokens) lands in a
-single chunk. Each upload also attaches custom_metadata (organization, country,
-budget_tier, ...) so queries can use metadata_filter later.
+Row-integrity design (see the converters): one document per org, plus an
+explicit chunking_config sized so every profile lands in a single chunk. Each
+upload also attaches custom_metadata (organization, intervention_tags, ...) so
+queries can use metadata_filter.
 
 Usage:
-    python upload_movement_map.py \
-        --manifest ../../../data/movement_map/movement_map_manifest.json \
-        [--store fileSearchStores/...] [--replace] [--dry-run] [--workers 8] [--limit N]
+    python upload_profiles.py --manifest <dir>/ace_movement_map_manifest.json \
+        [--store fileSearchStores/...] [--replace] [--purge-prefix "Movement Map - "] \
+        [--dry-run] [--workers 8] [--limit N]
+
+--purge-prefix exists for display-name migrations: --replace only deletes docs
+whose display name matches the NEW manifest, so renaming a collection (e.g.
+"Movement Map - {org}" -> "ACE Movement Map - {org}") would orphan every doc
+under the old prefix. Purge deletes all docs whose display name starts with the
+given prefix before uploading. Prefixes are matched exactly from the start of
+the name, so "Movement Map - " does NOT match either new collection prefix.
 """
 
 import argparse
@@ -28,9 +37,10 @@ from config import get_client, MOVEMENT_MAP_STORE  # noqa: E402
 
 client = get_client()
 
-# Every org profile fits in one chunk (largest row ≈ 400 tokens with labels), so a
-# chunk can never mix two organizations. The overlap is belt-and-suspenders: if a
-# future, longer profile ever splits, the overlap carries the H1 org name forward.
+# Every org profile fits in one chunk (the converters warn if one approaches
+# 450 tokens), so a chunk can never mix two organizations. The overlap is
+# belt-and-suspenders: if a longer profile ever splits, it carries the H1 org
+# name forward.
 CHUNKING_CONFIG = {
     "white_space_config": {
         "max_tokens_per_chunk": 500,
@@ -38,21 +48,37 @@ CHUNKING_CONFIG = {
     }
 }
 
-# Tracks what has already been uploaded so interrupted runs resume where they left off.
-UPLOAD_LOG_PATH = Path(__file__).parent / ".movement_map_upload_manifest.json"
 _log_lock = threading.Lock()
 
 
-def load_upload_log() -> dict:
-    if UPLOAD_LOG_PATH.exists():
-        return json.loads(UPLOAD_LOG_PATH.read_text())
+def upload_log_path(manifest_path: Path) -> Path:
+    """Per-manifest resume log, next to the manifest (inside gitignored data/)."""
+    return manifest_path.with_name(f".{manifest_path.stem}.upload_log.json")
+
+
+def load_upload_log(log_path: Path) -> dict:
+    if log_path.exists():
+        return json.loads(log_path.read_text())
     return {}
 
 
-def record_upload(log: dict, store_name: str, display_name: str):
+def record_upload(log: dict, log_path: Path, store_name: str, display_name: str):
     with _log_lock:
         log[f"{store_name}::{display_name}"] = {"uploaded_at": datetime.now().isoformat()}
-        UPLOAD_LOG_PATH.write_text(json.dumps(log, indent=2))
+        log_path.write_text(json.dumps(log, indent=2))
+
+
+def metadata_entries(meta: dict) -> list[dict]:
+    """Manifest custom_metadata -> API shape. Lists become string_list_value
+    (individually filterable, e.g. intervention_tags); everything else is a
+    plain string_value."""
+    entries = []
+    for key, value in meta.items():
+        if isinstance(value, list):
+            entries.append({"key": key, "string_list_value": {"values": value}})
+        else:
+            entries.append({"key": key, "string_value": value})
+    return entries
 
 
 def upload_one(store_name: str, doc_dir: Path, entry: dict, max_retries: int = 3) -> bool:
@@ -61,9 +87,7 @@ def upload_one(store_name: str, doc_dir: Path, entry: dict, max_retries: int = 3
     config = {
         "display_name": display_name,
         "chunking_config": CHUNKING_CONFIG,
-        "custom_metadata": [
-            {"key": k, "string_value": v} for k, v in entry.get("custom_metadata", {}).items()
-        ],
+        "custom_metadata": metadata_entries(entry.get("custom_metadata", {})),
     }
     for attempt in range(max_retries):
         try:
@@ -86,18 +110,19 @@ def upload_one(store_name: str, doc_dir: Path, entry: dict, max_retries: int = 3
     return False
 
 
-def delete_all_by_display_names(store_name: str, display_names: set[str], dry_run: bool) -> int:
-    """One documents.list pass, then delete every doc whose display name is in the set."""
+def delete_documents(store_name: str, should_delete, dry_run: bool) -> int:
+    """One documents.list pass, then delete every doc whose display name
+    satisfies should_delete."""
     from google.genai import types
     try:
         docs = list(client.file_search_stores.documents.list(parent=store_name))
     except Exception as e:
-        print(f"{Fore.YELLOW}⚠️  Could not list documents to replace: {e}{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}⚠️  Could not list documents to delete: {e}{Style.RESET_ALL}")
         return 0
     deleted = 0
     for doc in docs:
         display = getattr(doc, "display_name", "") or ""
-        if display not in display_names:
+        if not should_delete(display):
             continue
         if dry_run:
             print(f"  Would delete existing: {display}")
@@ -112,23 +137,33 @@ def delete_all_by_display_names(store_name: str, display_names: set[str], dry_ru
     return deleted
 
 
-def count_documents(store_name: str) -> int | None:
+def count_documents(store_name: str, display_names: set[str]) -> tuple[int | None, int | None]:
+    """(docs from this manifest, total docs in store). The store holds both
+    Movement Map collections, so total > manifest count is expected."""
     try:
-        return sum(1 for _ in client.file_search_stores.documents.list(parent=store_name))
+        matching = total = 0
+        for doc in client.file_search_stores.documents.list(parent=store_name):
+            total += 1
+            if (getattr(doc, "display_name", "") or "") in display_names:
+                matching += 1
+        return matching, total
     except Exception as e:
         print(f"{Fore.YELLOW}⚠️  Could not count documents: {e}{Style.RESET_ALL}")
-        return None
+        return None, None
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Upload Movement Map org profiles to a File Search store")
     parser.add_argument("--manifest", type=Path, required=True,
-                        help="movement_map_manifest.json produced by convert_movement_map.py")
+                        help="Manifest produced by either collection's convert.py")
     parser.add_argument("--store", default=MOVEMENT_MAP_STORE,
                         help="Store ID (default: MOVEMENT_MAP_STORE from config.py)")
     parser.add_argument("--replace", action="store_true",
                         help="Delete existing docs with matching display names before uploading "
                              "(sheet-refresh mode; also bypasses the local resume log)")
+    parser.add_argument("--purge-prefix", default=None,
+                        help="Also delete ALL docs whose display name starts with this prefix "
+                             "(display-name migration; bypasses the resume log)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would happen without uploading")
     parser.add_argument("--workers", type=int, default=8, help="Parallel uploads (default: 8)")
     parser.add_argument("--limit", type=int, default=0, help="Only process the first N entries (smoke test)")
@@ -150,13 +185,19 @@ if __name__ == "__main__":
     missing = [e["file"] for e in entries if not (doc_dir / e["file"]).exists()]
     if missing:
         sys.exit(f"❌ {len(missing)} file(s) in the manifest are missing from {doc_dir} "
-                 f"(e.g. {missing[:3]}). Re-run convert_movement_map.py.")
+                 f"(e.g. {missing[:3]}). Re-run the collection's convert.py.")
 
-    upload_log = load_upload_log()
+    log_path = upload_log_path(args.manifest)
+    upload_log = load_upload_log(log_path)
 
-    if args.replace:
-        names = {e["display_name"] for e in entries}
-        deleted = delete_all_by_display_names(args.store, names, args.dry_run)
+    if args.replace or args.purge_prefix:
+        replace_names = {e["display_name"] for e in entries} if args.replace else set()
+        prefix = args.purge_prefix
+
+        def should_delete(display: str) -> bool:
+            return display in replace_names or bool(prefix and display.startswith(prefix))
+
+        deleted = delete_documents(args.store, should_delete, args.dry_run)
         print(f"{'Would delete' if args.dry_run else 'Deleted'} {deleted} existing document(s)")
         to_upload = entries
     else:
@@ -183,7 +224,7 @@ if __name__ == "__main__":
         for future in as_completed(futures):
             entry = futures[future]
             if future.result():
-                record_upload(upload_log, args.store, entry["display_name"])
+                record_upload(upload_log, log_path, args.store, entry["display_name"])
                 uploaded += 1
                 if uploaded % 25 == 0:
                     print(f"  ...{uploaded}/{len(to_upload)} uploaded")
@@ -197,8 +238,9 @@ if __name__ == "__main__":
         for name in failed:
             print(f"  - {name}")
 
-    total = count_documents(args.store)
-    if total is not None:
-        expected = manifest["expected_count"]
-        marker = "✅" if total == expected else "⚠️ "
-        print(f"{marker} Store now holds {total} documents (manifest expects {expected})")
+    matching, total = count_documents(args.store, {e["display_name"] for e in entries})
+    if matching is not None:
+        expected = len(entries)
+        marker = "✅" if matching == expected else "⚠️ "
+        print(f"{marker} Store holds {matching}/{expected} documents from this manifest "
+              f"({total} total in store, including the other collection)")
