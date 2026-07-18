@@ -20,8 +20,11 @@ Two properties of the stack drive the bill:
    server holds a connection pool open, its queue worker polls the `run` table
    continuously, and (before this change) a cron scheduler queried Postgres
    every 5 seconds. Neon bills compute per CU-hour whenever the endpoint is
-   active, so Neon's compute clock runs the entire time Render is up, plus the
-   ~5-minute scale-to-zero window after Render spins down.
+   active — and since this project runs on an always-on paid Render instance
+   (chosen deliberately so users skip the cold start), Neon's compute clock
+   runs 24/7: ~730 hours/month at whatever CU size the autoscaler allocates.
+   That makes the autoscaling **max** the single biggest cost risk: an hour at
+   8 CU bills 32× an hour at 0.25 CU.
 2. **Storage only ever grew.** Every run writes a checkpoint per superstep;
    the state includes the full `messages` accumulation and any uploaded
    document as base64 (`document_b64`). No TTL was configured, so threads,
@@ -62,14 +65,19 @@ Do these in the [Neon console](https://console.neon.tech). Start at
 that tells you which of the following matters most.
 
 1. **Compute size / autoscaling** (Branches → your branch → compute settings):
-   set the minimum to **0.25 CU** and cap the maximum at **1 CU** (or fix it at
-   0.25). This database only shuffles small JSON state rows; it does not need a
-   big compute. Compute is billed as CU × hours, so halving CU halves that
-   line.
-2. **Scale to zero**: make sure it is **enabled** (it's the default, 5 min of
-   inactivity). Never disable it for this workload — Render's free-tier
-   spin-down is what lets Neon sleep, and the app's `wakeUpServer()` retry
-   logic already tolerates the cold start.
+   keep the minimum at **0.25 CU** and cap the maximum at **1 CU**. This
+   database only shuffles small JSON state rows; it does not need a big
+   compute. With an always-on server the monthly floor is
+   0.25 CU × 730 h ≈ $19 on Launch rates, and every hour the autoscaler
+   spends above the floor multiplies that — a ceiling of 8 CU allows up to
+   ~$620/month. One caveat: Neon also scales up to fit the *working set* into
+   compute memory, so a checkpoint table bloated by years of un-TTL'd state
+   can pin the allocation high; the TTL plus the one-time cleanup above is
+   what fixes that, not a bigger compute.
+2. **Scale to zero**: leave it **enabled** (default, 5 min of inactivity).
+   With the LangGraph server polling 24/7 it will rarely trigger, but it costs
+   nothing and covers deploys/outages; the app's `wakeUpServer()` retry logic
+   tolerates the ~500 ms first-query wake.
 3. **Instant restore / history retention** (Project settings → Instant
    restore): the retained WAL is billed as extra storage. Default is 1 day on
    paid plans. This database holds ephemeral agent state you would never
@@ -82,12 +90,10 @@ that tells you which of the following matters most.
 
 ## Things that would undo all of this
 
-- **Uptime pingers.** Pointing UptimeRobot/cron-job.org at the Render URL to
-  avoid cold starts keeps Render awake 24/7, which keeps Neon awake 24/7:
-  ~730 h × CU × rate per month (≈ $19/mo even at a fixed 0.25 CU on Launch).
-  If cold starts hurt, prefer paying for the smallest always-on Render
-  instance *and* accepting the Neon compute floor consciously — or keep the
-  current wake-on-use behavior, which is the cheapest configuration.
+- **Raising the autoscaling max "for headroom".** With the server always on,
+  the ceiling — not the floor — is what turns into money. Only raise it in
+  response to observed pressure (Monitoring showing sustained CPU/memory
+  saturation during real usage), never preemptively.
 - **Long-running transactions.** Neon treats `idle in transaction` as
   activity, so a stuck transaction blocks scale-to-zero.
 - **Disabling scale to zero** "for latency". The first-query wake is ~500 ms;
