@@ -74,12 +74,37 @@ METADATA_FIELDS = [
     (COL_ACE, "ace_history"),
 ]
 
-# ACE's interventions menu and the tag legend both derive from the State of the
-# Movement survey, so most menu values equal a tag's label (with or without the
-# "Category — " prefix); those map automatically below. Menu values that don't
-# line up textually get an explicit alias here (menu value -> tag code).
-# Values that still match nothing are reported at the end of the run.
-MENU_TAG_ALIASES: dict[str, str] = {}
+# ACE's interventions menu uses short values that rarely equal the taxonomy's
+# label text, so each menu value maps to its code(s) here. A few are judgment
+# calls where ACE's menu is broader than the taxonomy: "Corporate outreach" ->
+# welfare engagement, "Government outreach" -> animal policy advocacy, "Direct
+# care" -> both animal-care tags. "Vegan outreach" and "Popular initiatives"
+# have no taxonomy equivalent and stay deliberately unmapped. Cells matching
+# no tag at all are reported at the end of the run.
+MENU_TAG_ALIASES: dict[str, tuple[str, ...]] = {
+    "Investigations": ("PUB-Investigations",),
+    "Legal advocacy": ("GOV-Animal",),
+    "Corporate outreach": ("BIZ-WelfareEngage",),
+    "Media outreach": ("PUB-Journalism",),
+    "Protests": ("PUB-Protest",),
+    "Research - advocacy": ("MVT-Research",),
+    "Research - FAW": ("MVT-Research",),
+    "Direct care": ("ANI-Sanctuary", "ANI-Rescue"),
+    "Social media": ("PUB-Digital",),
+    "Network building": ("MVT-Network",),
+    "Skill building": ("MVT-Training",),
+    "Formal education": ("PUB-Education",),
+    "Government outreach": ("GOV-Animal",),
+    "Professional services": ("MVT-ProServices",),
+    "Product certification": ("BIZ-Labeling",),
+    "Farmer collaboration": ("BIZ-Producer",),
+    "Influence investments": ("BIZ-InfluenceInvest",),
+    "Provide funding": ("MVT-Funding",),
+    "Recruitment/retention": ("MVT-Network",),
+    "Veg*n events": ("PUB-Events",),
+    "Celebrity outreach": ("PUB-Influencer",),
+    "Books, etc.": ("PUB-Media",),
+}
 
 
 def _tag_alias_table() -> dict[str, tuple[str, ...]]:
@@ -91,8 +116,9 @@ def _tag_alias_table() -> dict[str, tuple[str, ...]]:
         if " — " in label:
             aliases.append(label.split(" — ", 1)[1].casefold())
         table[code] = aliases
-    for menu_value, code in MENU_TAG_ALIASES.items():
-        table[code].append(menu_value.casefold())
+    for menu_value, codes in MENU_TAG_ALIASES.items():
+        for code in codes:
+            table[code].append(menu_value.casefold())
     return {code: tuple(aliases) for code, aliases in table.items()}
 
 
