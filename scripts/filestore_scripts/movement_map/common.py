@@ -18,8 +18,17 @@ from pathlib import Path
 # Sheet placeholders that mean "no value"
 ABSENT_VALUES = {"", "[no website found]", "n/a", "na", "-", "—"}
 
-# Gemini custom metadata string values are capped; stay safely under the limit.
-METADATA_VALUE_MAX_CHARS = 250
+# Gemini custom metadata string values are capped at 256 BYTES — the API error
+# says "characters" but counts UTF-8 bytes, so em-dashes cost 3. Stay safely under.
+METADATA_VALUE_MAX_BYTES = 250
+
+
+def truncate_metadata_value(value: str, max_bytes: int = METADATA_VALUE_MAX_BYTES) -> str:
+    """Truncate to the metadata byte budget without splitting a UTF-8 character."""
+    encoded = value.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return value
+    return encoded[:max_bytes].decode("utf-8", errors="ignore").rstrip()
 
 # upload_profiles.py chunks at 500 tokens. A profile at or above this estimate
 # (~4 chars/token) could split into two chunks and lose the one-org-one-chunk

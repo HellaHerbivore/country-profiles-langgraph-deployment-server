@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # movement_map/ shared helpers
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src" / "country_profiles"))
 from common import (  # noqa: E402
-    METADATA_VALUE_MAX_CHARS, clean, clean_list, dedupe_slug, slugify,
+    clean, clean_list, dedupe_slug, slugify, truncate_metadata_value,
     warn_if_oversized, write_manifest,
 )
 from intervention_tags import INTERVENTION_TAGS  # noqa: E402
@@ -172,7 +172,7 @@ def build_metadata(fields: dict, unmatched_interventions: set[str]) -> dict:
     for col, key in METADATA_FIELDS:
         value = fields.get(col, "")
         if value:
-            meta[key] = value[:METADATA_VALUE_MAX_CHARS]
+            meta[key] = truncate_metadata_value(value)
     tags = interventions_to_tags(fields.get(COL_INTERVENTIONS, ""), unmatched_interventions)
     if tags:
         meta["intervention_tags"] = tags  # list -> string_list_value at upload

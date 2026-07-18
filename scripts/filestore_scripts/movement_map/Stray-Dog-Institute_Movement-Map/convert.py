@@ -33,7 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # movement_map/ shared helpers
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src" / "country_profiles"))
 from common import (  # noqa: E402
-    METADATA_VALUE_MAX_CHARS, clean, dedupe_slug, slugify,
+    clean, dedupe_slug, slugify, truncate_metadata_value,
     warn_if_oversized, write_manifest,
 )
 from intervention_tags import INTERVENTION_TAGS  # noqa: E402
@@ -140,10 +140,10 @@ def build_metadata(fields: dict, tags: list[tuple[str, bool]]) -> dict:
     for col, key in string_fields:
         value = fields.get(col, "")
         if value:
-            meta[key] = value[:METADATA_VALUE_MAX_CHARS]
+            meta[key] = truncate_metadata_value(value)
     expanded = expand_tags(tags)
     if expanded:
-        meta["interventions"] = expanded[:METADATA_VALUE_MAX_CHARS]
+        meta["interventions"] = truncate_metadata_value(expanded)
     codes = list(dict.fromkeys(code for code, _ in tags))  # dedupe, keep order
     if codes:
         meta["intervention_tags"] = codes  # list -> string_list_value at upload
