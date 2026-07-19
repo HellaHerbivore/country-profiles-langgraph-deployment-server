@@ -68,6 +68,12 @@ def ask(store_name: str, prompt: str, metadata_filter: str | None = None):
     )
 
 
+def _normalized(text: str) -> str:
+    """Case- and dash-insensitive form for value comparison — the model may
+    render "Tier 2: $100k-1M" with an en-dash."""
+    return text.replace("–", "-").replace("—", "-").lower()
+
+
 def probe_for(entry: dict) -> tuple[str, str]:
     """(pointed question, expected answer fragment or '') for one org, using
     whichever checkable field this collection's metadata carries."""
@@ -99,7 +105,7 @@ def check_org(store_name: str, entry: dict) -> bool:
         problems.append("no grounding citations returned")
     elif display_name not in titles:
         problems.append(f"org's OWN document was not among the citations; retrieved: {titles}")
-    if expected and expected.lower() not in answer.lower():
+    if expected and _normalized(expected) not in _normalized(answer):
         problems.append(f"expected {expected!r} not in answer {answer!r}")
 
     if problems:
