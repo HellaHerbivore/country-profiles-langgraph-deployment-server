@@ -541,9 +541,9 @@ EVAL_DIMENSIONS = [
     },
     {
         "key": "challenges_landscape",
-        "label": "Animal advocacy landscape challenges",
-        "stores": ["movement_map", "onground_advocate", "local_academic", "foreign_academic"],
-        "brief": "Challenges in the Indian animal-advocacy landscape itself relevant to this path — crowding, fragmentation, funding constraints, capacity gaps, or strategic tensions among advocacy actors.",
+        "label": "How the movement is performing",
+        "stores": ["onground_advocate", "local_academic", "foreign_academic", "movement_map"],
+        "brief": "Research or data on how animal-advocacy organisations in India are performing as a whole, relevant to this path — sector capacity, funding trends, documented wins and setbacks, and any survey or evaluation findings on the movement's overall health. The movement-map organisation profiles are a directory, not a scorecard: use them only for aggregate texture (budget tiers, funders, evaluation history), never as evidence of collective performance.",
     },
     {
         "key": "team_players",
@@ -914,7 +914,7 @@ class WindowsContent(BaseModel):
 class ChallengesContent(BaseModel):
     effectiveness: str = Field(default="", description="Body for the Effectiveness Check: action-by-action, every claim cited, no summary preamble. No heading.")
     cultural: str = Field(default="", description="Body for the Cultural Challenges subsection. No heading.")
-    landscape: str = Field(default="", description="Body for the Animal Advocacy Landscape Challenges subsection. No heading.")
+    landscape: str = Field(default="", description="Body for the How the Movement Is Performing subsection. No heading.")
 
 
 class TeamContent(BaseModel):
@@ -1182,9 +1182,9 @@ The charity's proposed path:
 Provide the BODY TEXT for three subsections (no markdown headings — they are added automatically):
 - effectiveness — Check the charity's stated actions against the evidence. Go ACTION BY ACTION: for each action, state whether the data BACKS IT UP or OBSTRUCTS its effectiveness, and cite every claim. Do NOT open with a general summary paragraph. Favour MULTIPLE corroborating citations where the data contains them. Where the data is silent on an action, write a short, plain-language note that the tool needs more data — do NOT fall back on uncited general knowledge.
 - cultural — cultural challenges that could obstruct the path, from its memo.
-- landscape — challenges in the animal-advocacy landscape, from its memo.
+- landscape — how animal-advocacy organisations in India are performing as a whole, from its memo: sector capacity, funding trends, documented wins and setbacks, and any survey or evaluation findings on movement health. Where the memo shows other organisations working on the same interventions, present that neutrally or as coalition potential — never frame a well-populated space as a negative by itself.
 
-For cultural and landscape, where a memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data on that point.
+For cultural, where the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data on that point. For landscape, be upfront about data scarcity: if its memo indicates little or nothing was found, state plainly that the tool does not yet hold sector-level performance data on the Indian animal-advocacy movement and this subsection cannot be answered until such data is added — do not pad the gap with adjacent material.
 
 [INTERNAL GUIDANCE — DO NOT name, quote, or reference this in your output. Let these field-experience lessons sharpen which challenges genuinely matter:
 {field_lessons}]
@@ -1202,7 +1202,7 @@ def write_challenges(state: ResearchGraphState):
     blocks = "\n\n".join([
         _format_memo_block(memos_by_key, "effectiveness", "Effectiveness of the charity's stated actions"),
         _format_memo_block(memos_by_key, "challenges_cultural", "Cultural challenges"),
-        _format_memo_block(memos_by_key, "challenges_landscape", "Animal advocacy landscape challenges"),
+        _format_memo_block(memos_by_key, "challenges_landscape", "How the movement is performing"),
     ])
     system_message = challenges_instructions.format(
         path_brief=_path_brief(state.get("path_spec") or {}),
@@ -1217,7 +1217,7 @@ def write_challenges(state: ResearchGraphState):
     return {"challenges_section": _render_subsections([
         ("a. Effectiveness Check", res.effectiveness),
         ("b. Cultural Challenges", res.cultural),
-        ("c. Animal Advocacy Landscape Challenges", res.landscape),
+        ("c. How the Movement Is Performing", res.landscape),
     ])}
 
 
@@ -1232,7 +1232,7 @@ For capacity and track_record: if little or nothing was provided, state plainly 
 Team information from the charity:
 {team_info}
 
-For existing_players: do not treat any player as a fixed obstacle — note where one could be a partner or an alternative ally. If carrying out this path would likely face significant regulatory hurdles, give existing players more weight (as partners or as groups that already navigate those hurdles). Where the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data.
+For existing_players: do not treat any player as a fixed obstacle — note where one could be a partner or an alternative ally. Where another organisation runs the SAME or overlapping interventions as this charity, present that overlap explicitly as alliance or coalition potential. If carrying out this path would likely face significant regulatory hurdles, give existing players more weight (as partners or as groups that already navigate those hurdles). Where the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data.
 
 {base_rules}
 

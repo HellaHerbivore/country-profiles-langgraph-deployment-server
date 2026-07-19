@@ -122,9 +122,11 @@ The store is registered end to end:
    `team_players` dimension additionally runs the tag-filtered supplementary
    retrieval (`_tag_filtered_movement_scan`).
 3. `EVAL_DIMENSIONS`: `movement_map` feeds `team_players` (Existing Players
-   Doing Similar Work), `challenges_landscape` (advocacy-landscape
-   crowding/gaps), and `windows_unspotted` (coalition/partner opportunities);
-   it is also searched by the On-the-Ground Experts writer.
+   Doing Similar Work — overlap surfaced as alliance/coalition potential),
+   `challenges_landscape` (How the Movement Is Performing — aggregate texture
+   only; the map is a directory, not a scorecard), and `windows_unspotted`
+   (coalition/partner opportunities); it is also searched by the On-the-Ground
+   Experts writer.
 4. `scripts/filestore_scripts/upload_to_store.py` — `"movement-map"` alias.
 5. `frontend/web/src/lib/sources.ts` — "Movement Map (ACE + Stray Dog
    Institute)" source checkbox (checked by default).
