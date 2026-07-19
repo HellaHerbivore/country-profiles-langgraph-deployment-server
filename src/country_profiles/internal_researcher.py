@@ -33,8 +33,21 @@ google_api_key = os.getenv("GOOGLE_API_KEY")
 if not google_api_key:
     raise ValueError("GOOGLE_API_KEY is missing from your .env file!")
 
+# Cost control: Gemini 3 Flash runs at thinking_level="high" unless told
+# otherwise, and thinking tokens bill at the OUTPUT rate (~6x input). Mechanical
+# steps (transcription, extraction, labelling) need no reasoning depth; File
+# Search retrievals keep "medium" so the model still plans its searches well.
+# The section writers stay on the default — their reasoning is the product.
+THINKING_MECHANICAL = "low"
+THINKING_RETRIEVAL = "medium"
+
 llm = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", api_key=google_api_key, temperature=0.0)
-llm_creative = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", api_key=google_api_key, temperature=0.5)
+llm_mechanical = ChatGoogleGenerativeAI(
+    model="gemini-3-flash-preview",
+    api_key=google_api_key,
+    temperature=0.0,
+    thinking_level=THINKING_MECHANICAL,
+)
 
 gemini_client = genai.Client(api_key=google_api_key)
 
@@ -325,7 +338,10 @@ def ingest_document(state: ResearchGraphState):
                         types.Part.from_bytes(data=raw_bytes, mime_type="application/pdf"),
                         _PDF_TRANSCRIBE_PROMPT,
                     ],
-                    config=types.GenerateContentConfig(temperature=0.0),
+                    config=types.GenerateContentConfig(
+                        temperature=0.0,
+                        thinking_config=types.ThinkingConfig(thinking_level=THINKING_MECHANICAL),
+                    ),
                 )
                 document_text = (response.text or "").strip()
                 break
@@ -426,7 +442,7 @@ def normalise_path(state: ResearchGraphState):
             )]
         }
 
-    structured_llm = llm.with_structured_output(PathSpec)
+    structured_llm = llm_mechanical.with_structured_output(PathSpec)
     try:
         spec = cast(PathSpec, structured_llm.invoke([
             SystemMessage(content=path_extraction_instructions.format(input_text=combined)),
@@ -613,7 +629,7 @@ _TAG_LEGEND = "\n".join(f"{code}: {label}" for code, label in INTERVENTION_TAGS.
 def _select_intervention_tags(path_brief: str) -> List[str]:
     """Classify the charity's path into 1-4 taxonomy codes for the movement-map
     metadata filter."""
-    picker = llm.with_structured_output(InterventionTagPick)
+    picker = llm_mechanical.with_structured_output(InterventionTagPick)
     result = picker.invoke([
         SystemMessage(content=(
             "Classify a charity's proposed activities against an intervention-tag legend. "
@@ -660,6 +676,7 @@ def _tag_filtered_movement_scan(path_brief: str, expert_instructions: str) -> tu
                     metadata_filter=metadata_filter,
                 ))],
                 temperature=0.0,
+                thinking_config=types.ThinkingConfig(thinking_level=THINKING_RETRIEVAL),
             ),
         )
         text = (response.text or "").strip()
@@ -724,6 +741,7 @@ CRITICAL RULES:
         system_instruction=expert_instructions,
         tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=active_store_ids))],
         temperature=0.0,
+        thinking_config=types.ThinkingConfig(thinking_level=THINKING_RETRIEVAL),
     )
 
     max_tries = 3
@@ -1034,7 +1052,7 @@ def write_stated_work(state: ResearchGraphState):
     impact_paragraph = ""
     rows: list[list[str]] = []
     try:
-        res = cast(StatedWorkContent, llm.with_structured_output(StatedWorkContent).invoke([
+        res = cast(StatedWorkContent, llm_mechanical.with_structured_output(StatedWorkContent).invoke([
             SystemMessage(content=stated_work_instructions.format(details=details)),
             HumanMessage(content="Produce the impact paragraph and the activity rows."),
         ]))
@@ -1509,6 +1527,7 @@ def write_experts(state: ResearchGraphState):
         system_instruction=system_message,
         tools=[types.Tool(file_search=types.FileSearch(file_search_store_names=active_store_ids))],
         temperature=0.0,
+        thinking_config=types.ThinkingConfig(thinking_level=THINKING_RETRIEVAL),
     )
 
     text = ""
@@ -1618,7 +1637,7 @@ def _make_report_title(state: ResearchGraphState) -> str:
     phrase = ""
     if descriptor or summary:
         try:
-            result = llm.invoke([
+            result = llm_mechanical.invoke([
                 SystemMessage(content=(
                     "You name evaluation reports. Reply with only a short Title Case phrase "
                     "(3-8 words) naming the charity intervention(s) described, e.g. "
