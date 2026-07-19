@@ -69,23 +69,26 @@
   }
 
   .report-prose h1 {
-    @apply font-serif text-[2rem] font-medium text-foreground leading-tight mt-12 mb-4 tracking-tight;
+    @apply font-serif text-[2rem] font-bold text-foreground leading-tight mt-12 mb-4 tracking-tight;
   }
 
+  /* Major section headings: full-width plum bar to divide the report. */
   .report-prose h2 {
-    @apply font-serif text-[1.5rem] font-medium text-foreground leading-tight mt-12 mb-4;
+    @apply font-serif text-[1.5rem] font-bold leading-tight mt-12 mb-4 px-4 py-2 rounded-md;
+    background-color: #843468; /* plum */
+    color: #e6e8ea; /* light gray */
   }
 
   .report-prose h3 {
-    @apply text-[1.25rem] font-semibold text-foreground mt-8 mb-2;
+    @apply text-[1.25rem] font-bold text-foreground mt-8 mb-2;
   }
 
   .report-prose h4 {
-    @apply text-[1.1rem] font-semibold text-foreground mt-6 mb-2;
+    @apply text-[1.1rem] font-bold text-foreground mt-6 mb-2;
   }
 
   .report-prose h5 {
-    @apply text-[1.05rem] font-semibold text-muted-foreground mt-6 mb-2 tracking-wide;
+    @apply text-[1.05rem] font-bold text-muted-foreground mt-6 mb-2 tracking-wide;
   }
 
   .report-prose > h1:first-child,
