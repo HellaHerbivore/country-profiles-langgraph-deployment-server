@@ -525,7 +525,7 @@ EVAL_DIMENSIONS = [
         "key": "path_cooperation",
         "label": "Industry and government cooperation",
         "stores": ["goi_pib", "onground_advocate", "local_academic"],
-        "brief": "The willingness of industry bodies and government bodies in India to cooperate with this kind of work, including their attitudes towards cooperating with nonprofits.",
+        "brief": "The willingness of industry bodies and government bodies in India to cooperate with this kind of work, including their attitudes towards cooperating with nonprofits. Direct statements of willingness are rare, so ALSO retrieve indirect signals that bear on it: government schemes, missions or funding programmes adjacent to the path's activities; ministry statements or press releases touching the sector; documented government-NGO or public-private collaborations; industry-body positions; and accounts of how government or industry responded to advocacy or nonprofit activity in this domain.",
     },
     {
         "key": "windows_unspotted",
@@ -843,18 +843,19 @@ WRITER_BASE_RULES = """SHARED RULES:
 1. Write in objective, third-person prose. Never mention this tool, the analysis software, "the model", AI personas, interviewers, or the internal source/vault names.
 2. Preserve every inline citation EXACTLY as given — the <span> wrapper and its contents. Never reformat, rename, shorten or drop a citation.
 3. Never summarise away numeric or statistical data. Preserve all figures, percentages and currency values exactly.
-4. Work point by point. Include what the evidence supports; where a specific point isn't supported by the provided material, write a short, plain-language note that more data is needed on that point and move on. Never write internal markers verbatim, never invent content, and never drop a subsection or its title."""
+4. Work point by point. Include what the evidence supports; where a specific point isn't supported by the provided material, write a short, plain-language note that more data is needed on that point and move on. Never write internal markers verbatim, never invent content, and never drop a subsection or its title.
+5. State your confidence. Whenever you make an evaluative judgement or an inference, say how confident it is (high, moderate, or low) and ground that in the evidence used — strong, corroborated evidence warrants high confidence; indirect, thin or single-source evidence warrants moderate or low. Never present an inference as a certainty."""
 
 # Used inside a memo block to tell the writer (not the reader) that a point is empty.
 _GAP_MARKER = "(No relevant information was found in the available sources for this point. Write a brief, plain-language note that the tool needs more data here, and keep the subsection in place.)"
 
 
-def _format_memo_block(memos_by_key: dict, key: str, fallback_label: str) -> str:
+def _format_memo_block(memos_by_key: dict, key: str, fallback_label: str, gap_marker: str = _GAP_MARKER) -> str:
     m = memos_by_key.get(key)
     label = (m or {}).get("label") or fallback_label
     if m and not m.get("no_knowledge") and (m.get("memo") or "").strip():
         return f"### {label}\n{m['memo'].strip()}"
-    return f"### {label}\n{_GAP_MARKER}"
+    return f"### {label}\n{gap_marker}"
 
 
 def _bullet_list(items: list[str]) -> str:
@@ -900,10 +901,53 @@ class RegulatoryContent(BaseModel):
     charity_attitudes: str = Field(default="", description="Body on cultural attitudes towards foreign/local charities. No heading.")
 
 
+# Path Analysis is organised per stated intervention: each intervention the
+# charity puts forward gets its own subsection, and within it the three fixed
+# dimensions are each assessed in order of their relevance to THAT intervention.
+_PATH_DIMENSION_TITLES = {
+    "public_engagement": "Public Engagement",
+    "tech_feasibility": "Tech Feasibility",
+    "industry_government_cooperation": "Industry and Government Cooperation",
+}
+_LEVEL_RANK = {"high": 0, "moderate": 1, "low": 2}
+
+
+def _norm_level(value: str) -> str:
+    """Normalise a relevance/confidence level to high/moderate/low ('' if unrecognised)."""
+    v = (value or "").strip().lower()
+    if v == "medium":
+        v = "moderate"
+    return v if v in _LEVEL_RANK else ""
+
+
+def _norm_path_dimension(value: str) -> str:
+    """Map a model-emitted dimension name onto a canonical dimension key ('' if unrecognised)."""
+    v = re.sub(r"[^a-z]+", "_", (value or "").strip().lower()).strip("_")
+    aliases = {
+        "technological_feasibility": "tech_feasibility",
+        "industry_and_government_cooperation": "industry_government_cooperation",
+        "government_and_industry_cooperation": "industry_government_cooperation",
+    }
+    v = aliases.get(v, v)
+    return v if v in _PATH_DIMENSION_TITLES else ""
+
+
+class PathDimensionAssessment(BaseModel):
+    dimension: str = Field(description="One of: public_engagement, tech_feasibility, industry_government_cooperation.")
+    relevance: str = Field(default="", description="How relevant this dimension is to THIS intervention: high, moderate, or low.")
+    relevance_reason: str = Field(default="", description="One sentence on why this dimension matters (or matters little) for this specific intervention. No heading.")
+    analysis: str = Field(default="", description="The assessment of this intervention against this dimension, grounded in the research memos, with citations preserved. Depth proportional to relevance. No heading.")
+    confidence: str = Field(default="", description="Confidence in this assessment given the evidence used: high, moderate, or low.")
+    confidence_reason: str = Field(default="", description="One sentence on what the evidence does and doesn't establish for this assessment. No heading.")
+
+
+class InterventionPathAnalysis(BaseModel):
+    intervention: str = Field(description="A short, plain name for the stated intervention being examined, drawn from the charity's own path.")
+    assessments: List[PathDimensionAssessment] = Field(default_factory=list, description="All three dimensions for this intervention, ordered most relevant first.")
+
+
 class PathAnalysisContent(BaseModel):
-    public_engagement: str = Field(default="", description="Body for the Public Engagement subsection. No heading.")
-    tech_feasibility: str = Field(default="", description="Body for the Tech Feasibility subsection. No heading.")
-    industry_government_cooperation: str = Field(default="", description="Body for the Industry and Government Cooperation subsection. No heading.")
+    interventions: List[InterventionPathAnalysis] = Field(default_factory=list, description="One entry per distinct stated intervention (1-4; group closely related activities into one intervention).")
 
 
 class WindowsContent(BaseModel):
@@ -1092,47 +1136,143 @@ def write_regulatory(state: ResearchGraphState):
     ])}
 
 
-path_analysis_instructions = """You are writing the "Path Analysis" section of a theory-of-change evaluation for an animal-advocacy charity operating in India. This section checks how RELEVANT and workable the charity's path is against the realities below.
+path_analysis_instructions = """You are writing the "Path Analysis" section of a theory-of-change evaluation for an animal-advocacy charity operating in India. This section examines EACH stated intervention in the charity's path against three fixed dimensions:
+- public_engagement — how receptive the public is (incl. public consciousness of animal welfare).
+- tech_feasibility — whether the methods the intervention relies on are technically feasible here.
+- industry_government_cooperation — how willing industry and government bodies are to cooperate, incl. their attitudes to working with nonprofits.
 
 The charity's proposed path:
 {path_brief}
 
-Provide the BODY TEXT for three subsections, each judged against its matching research memo:
-- public_engagement — how receptive the public is (incl. public consciousness of animal welfare).
-- tech_feasibility — whether the methods the path relies on are technically feasible here.
-- industry_government_cooperation — how willing industry and government bodies are to cooperate, incl. their attitudes to working with nonprofits.
+STRUCTURE THE ANALYSIS PER INTERVENTION:
+1. Identify the distinct interventions in the charity's stated path (group closely related activities into one intervention; return 1-4). Name each plainly so the reader knows exactly which stated intervention is being examined. Never invent an intervention the charity did not state.
+2. For EACH intervention, assess ALL THREE dimensions, ordered from most to least relevant to that intervention.
+3. For each dimension, state explicitly HOW RELEVANT it is to this intervention (high / moderate / low) and WHY in one sentence — e.g. an intervention relying on consumer dietary change makes public engagement central, while tech feasibility may barely apply to it. Give the most relevant dimensions the deepest analysis; a low-relevance dimension needs only a brief assessment that makes its limited bearing clear.
+4. Ground each analysis in the matching research memo below and judge THIS intervention against it — tie the evidence to the specific intervention, not to general observations about India.
+5. For every assessment, state your CONFIDENCE (high / moderate / low) given the evidence used, with one sentence on what that evidence does and doesn't establish.
 
-Do NOT include any markdown headings in your fields — the headings are added automatically. For any subsection whose memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data on that point.
+MAKE REASONED INFERENCES — especially for industry_government_cooperation:
+Direct evidence of whether government or industry would cooperate with a specific charity is rare. Where the memos lack a direct statement, INFER from what they do contain — government schemes and priorities in adjacent areas, ministry activity, documented collaborations, industry positions, the political climate, and attitudes towards charities. State the inference plainly ("state fisheries departments would likely engage because…", "large producers would probably resist because…"), tie it to the cited evidence it rests on, and set the confidence level accordingly — an inference from indirect evidence is usually moderate or low confidence, and that must be said. Do NOT default to writing that more data is needed when the memos contain material an inference can rest on; reserve that phrasing for dimensions where the memos genuinely offer nothing to reason from, and there keep the dimension in place with a short, plain-language note that the tool needs more data, marked low confidence.
+
+The supplementary context memos below exist to support such inferences (the political environment and attitudes towards charities often signal how cooperative official bodies would be). Draw on them where they bear on a dimension, with citations, but do not restate them wholesale — they are covered in their own report section.
+
+Do NOT include any markdown headings in your fields — the headings are added automatically.
 
 {base_rules}
 
 {citation_rules}
 
-Research memos:
-{memos}"""
+Research memos (one per dimension):
+{memos}
+
+Supplementary context memos (for inference support only):
+{context_memos}"""
+
+
+# Path-analysis-specific gap marker: the writer must try to infer from the other
+# provided memos before falling back to the "more data needed" note.
+_PATH_GAP_MARKER = "(No relevant information was found in the available sources for this dimension. If the OTHER memos provided offer material to reason from, make a clearly-flagged inference from them with an honest — usually low — confidence level; otherwise write a brief, plain-language note that the tool needs more data here. Keep the dimension in place either way.)"
+
+
+def _render_path_analysis(interventions: List[InterventionPathAnalysis]) -> str:
+    """Render the per-intervention Path Analysis: one '### a. <Intervention>'
+    subsection per stated intervention, with a '#### <Dimension> — <Level>
+    Relevance' block for each of the three dimensions, most relevant first.
+    Canonical dimension titles are injected here so they can never drift, and
+    any dimension the model skipped stays visible as an explicit gap."""
+    blocks: list[str] = []
+    for idx, item in enumerate(interventions):
+        name = " ".join((item.intervention or "").split()) or f"Stated Intervention {idx + 1}"
+        letter = chr(ord("a") + idx) if idx < 26 else str(idx + 1)
+        lines = [f"### {letter}. {name}"]
+
+        by_dim: dict[str, PathDimensionAssessment] = {}
+        for a in item.assessments or []:
+            key = _norm_path_dimension(a.dimension)
+            if key and key not in by_dim:
+                by_dim[key] = a
+
+        # Stable sort: enforce high → moderate → low while preserving the
+        # model's most-relevant-first ordering within a level.
+        ordered = sorted(by_dim.items(), key=lambda kv: _LEVEL_RANK.get(_norm_level(kv[1].relevance), 3))
+
+        for key, a in ordered:
+            title = _PATH_DIMENSION_TITLES[key]
+            relevance = _norm_level(a.relevance)
+            lines.append(f"#### {title} — {relevance.capitalize()} Relevance" if relevance else f"#### {title}")
+            reason = " ".join((a.relevance_reason or "").split())
+            if reason:
+                lines.append(f"*Why this matters for this intervention:* {reason}")
+            lines.append((a.analysis or "").strip() or (
+                "There isn't enough information in the available sources to assess this dimension for this intervention yet; more data is needed."
+            ))
+            confidence = _norm_level(a.confidence)
+            conf_reason = " ".join((a.confidence_reason or "").split())
+            if confidence or conf_reason:
+                conf_label = confidence.capitalize() if confidence else "Not stated"
+                lines.append(f"*Confidence in this assessment:* {conf_label}" + (f" — {conf_reason}" if conf_reason else ""))
+
+        for key, title in _PATH_DIMENSION_TITLES.items():
+            if key not in by_dim:
+                lines.append(f"#### {title}")
+                lines.append("The evaluation did not reach an assessment of this dimension for this intervention; more data is needed.")
+
+        blocks.append("\n\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def _memo_body(memos_by_key: dict, key: str) -> str:
+    m = memos_by_key.get(key) or {}
+    if not m.get("no_knowledge") and (m.get("memo") or "").strip():
+        return m["memo"].strip()
+    return ""
 
 
 def write_path_analysis(state: ResearchGraphState):
     memos_by_key = state.get("memos_by_key") or {}
     blocks = "\n\n".join([
-        _format_memo_block(memos_by_key, "path_public", "Public engagement"),
-        _format_memo_block(memos_by_key, "path_tech", "Tech feasibility"),
-        _format_memo_block(memos_by_key, "path_cooperation", "Industry and government cooperation"),
+        _format_memo_block(memos_by_key, "path_public", "Public engagement", gap_marker=_PATH_GAP_MARKER),
+        _format_memo_block(memos_by_key, "path_tech", "Tech feasibility", gap_marker=_PATH_GAP_MARKER),
+        _format_memo_block(memos_by_key, "path_cooperation", "Industry and government cooperation", gap_marker=_PATH_GAP_MARKER),
     ])
+    # Adjacent regulatory memos double as inference support (esp. for how
+    # cooperative official bodies would be); only non-empty ones are passed.
+    context_parts = []
+    for key, label in (
+        ("reg_political", "Political environment"),
+        ("reg_charity_attitudes", "Cultural attitudes towards foreign and local charities"),
+    ):
+        body = _memo_body(memos_by_key, key)
+        if body:
+            context_parts.append(f"### {label}\n{body}")
     system_message = path_analysis_instructions.format(
         path_brief=_path_brief(state.get("path_spec") or {}),
         base_rules=WRITER_BASE_RULES,
         citation_rules=GLOBAL_CITATION_RULES,
         memos=blocks,
+        context_memos="\n\n".join(context_parts) or "(none available for this run)",
     )
-    res = cast(PathAnalysisContent, llm.with_structured_output(PathAnalysisContent).invoke(
-        [SystemMessage(content=system_message), HumanMessage(content="Write the three subsection bodies.")]
-    ))
-    return {"path_analysis_section": _render_subsections([
-        ("a. Public Engagement", res.public_engagement),
-        ("b. Tech Feasibility", res.tech_feasibility),
-        ("c. Industry and Government Cooperation", res.industry_government_cooperation),
-    ])}
+
+    interventions: list[InterventionPathAnalysis] = []
+    try:
+        res = cast(PathAnalysisContent, llm.with_structured_output(PathAnalysisContent).invoke(
+            [SystemMessage(content=system_message), HumanMessage(content="Write the per-intervention path analysis.")]
+        ))
+        interventions = [i for i in (res.interventions or []) if (i.intervention or "").strip() or i.assessments]
+    except Exception as e:
+        print(f"[write_path_analysis] per-intervention analysis failed: {e}; falling back to the dimension memos.")
+
+    if interventions:
+        section = _render_path_analysis(interventions)
+    else:
+        # Degraded fallback: the old flat layout, filled straight from the
+        # (already cited) retrieval memos so the section is never lost.
+        section = _render_subsections([
+            ("a. Public Engagement", _memo_body(memos_by_key, "path_public")),
+            ("b. Tech Feasibility", _memo_body(memos_by_key, "path_tech")),
+            ("c. Industry and Government Cooperation", _memo_body(memos_by_key, "path_cooperation")),
+        ])
+    return {"path_analysis_section": section}
 
 
 windows_instructions = """You are writing the "Windows of Opportunity" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
