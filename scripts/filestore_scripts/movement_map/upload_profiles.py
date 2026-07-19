@@ -137,6 +137,18 @@ def delete_documents(store_name: str, should_delete, dry_run: bool) -> int:
     return deleted
 
 
+def store_display_names(store_name: str) -> set[str] | None:
+    """Display names currently in the store. Guards resume runs against a stale
+    or lost local log (e.g. after Ctrl+C): a doc already in the store is never
+    re-uploaded, which would create a duplicate — uploads are not idempotent."""
+    try:
+        return {(getattr(doc, "display_name", "") or "")
+                for doc in client.file_search_stores.documents.list(parent=store_name)}
+    except Exception as e:
+        print(f"{Fore.YELLOW}⚠️  Could not list existing documents: {e}{Style.RESET_ALL}")
+        return None
+
+
 def count_documents(store_name: str, display_names: set[str]) -> tuple[int | None, int | None]:
     """(docs from this manifest, total docs in store). The store holds both
     Movement Map collections, so total > manifest count is expected."""
@@ -201,14 +213,18 @@ if __name__ == "__main__":
         print(f"{'Would delete' if args.dry_run else 'Deleted'} {deleted} existing document(s)")
         to_upload = entries
     else:
+        existing = store_display_names(args.store)
+        if existing is None:
+            print(f"{Fore.YELLOW}⚠️  Falling back to the local resume log only{Style.RESET_ALL}")
+            existing = set()
         to_upload, skipped_entries = [], 0
         for e in entries:
-            if f"{args.store}::{e['display_name']}" in upload_log:
+            if f"{args.store}::{e['display_name']}" in upload_log or e["display_name"] in existing:
                 skipped_entries += 1
             else:
                 to_upload.append(e)
         if skipped_entries:
-            print(f"Skipping {skipped_entries} already-uploaded document(s) (resume log)")
+            print(f"Skipping {skipped_entries} document(s) already uploaded (resume log or already in store)")
 
     if args.dry_run:
         for e in to_upload[:10]:
