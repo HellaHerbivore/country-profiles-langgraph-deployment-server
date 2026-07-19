@@ -475,6 +475,8 @@ def _path_brief(path_spec: dict) -> str:
         parts.append("Expected outcomes: " + "; ".join(path_spec["outcome_chain"]))
     if path_spec.get("final_impact"):
         parts.append(f"Intended impact: {path_spec['final_impact']}")
+    if path_spec.get("charity_flagged_opportunities"):
+        parts.append("Opportunities the charity has flagged: " + "; ".join(path_spec["charity_flagged_opportunities"]))
     return "\n".join(parts)
 
 
@@ -526,6 +528,13 @@ EVAL_DIMENSIONS = [
         "label": "Industry and government cooperation",
         "stores": ["goi_pib", "onground_advocate", "local_academic"],
         "brief": "The willingness of industry bodies and government bodies in India to cooperate with this kind of work, including their attitudes towards cooperating with nonprofits. Direct statements of willingness are rare, so ALSO retrieve indirect signals that bear on it: government schemes, missions or funding programmes adjacent to the path's activities; ministry statements or press releases touching the sector; documented government-NGO or public-private collaborations; industry-body positions; and accounts of how government or industry responded to advocacy or nonprofit activity in this domain.",
+    },
+    {
+        # Skipped at dispatch when the charity flagged no opportunities.
+        "key": "windows_flagged",
+        "label": "Evidence on the charity's flagged opportunities",
+        "stores": ["goi_pib", "onground_advocate", "local_academic", "foreign_academic", "movement_map"],
+        "brief": "Evidence bearing on the opportunities the charity itself has flagged in its path (listed in the path description below): for each flagged opportunity, whether the sources SUPPORT it being a real, open, exploitable window for a charity like this — or UNDERMINE it (already closed, already crowded, overstated, or blocked by policy, market or cultural realities). Treat supporting and undermining evidence separately.",
     },
     {
         "key": "windows_unspotted",
@@ -582,9 +591,12 @@ def route_to_dimensions(state: ResearchGraphState):
     path_spec = state.get("path_spec") or {}
     brief = _path_brief(path_spec)
     selected = _resolve_selected_stores(state.get("selected_stores"))
+    # The flagged-opportunities check only makes sense when the charity flagged some.
+    has_flagged = any(str(o).strip() for o in (path_spec.get("charity_flagged_opportunities") or []))
+    dims = [d for d in EVAL_DIMENSIONS if d["key"] != "windows_flagged" or has_flagged]
     return [
         Send("gather_evidence", {"dimension": dim, "path_brief": brief, "selected_stores": selected})
-        for dim in EVAL_DIMENSIONS
+        for dim in dims
     ]
 
 
@@ -843,11 +855,11 @@ WRITER_BASE_RULES = """SHARED RULES:
 1. Write in objective, third-person prose. Never mention this tool, the analysis software, "the model", AI personas, interviewers, or the internal source/vault names.
 2. Preserve every inline citation EXACTLY as given — the <span> wrapper and its contents. Never reformat, rename, shorten or drop a citation.
 3. Never summarise away numeric or statistical data. Preserve all figures, percentages and currency values exactly.
-4. Work point by point. Include what the evidence supports; where a specific point isn't supported by the provided material, write a short, plain-language note that more data is needed on that point and move on. Never write internal markers verbatim, never invent content, and never drop a subsection or its title.
+4. Work point by point. Include what the evidence supports; where a specific point isn't supported by the provided material, write a short, plain-language note that more data is needed on that point — and NAME the specific data or research that would fill the gap (which document, statistic, stakeholder position, survey or study to obtain), so the reader knows exactly what further research to act on. A bare "more data is needed" is never enough. Then move on. Never write internal markers verbatim, never invent content, and never drop a subsection or its title.
 5. State your confidence. Whenever you make an evaluative judgement or an inference, say how confident it is (high, moderate, or low) and ground that in the evidence used — strong, corroborated evidence warrants high confidence; indirect, thin or single-source evidence warrants moderate or low. Never present an inference as a certainty."""
 
 # Used inside a memo block to tell the writer (not the reader) that a point is empty.
-_GAP_MARKER = "(No relevant information was found in the available sources for this point. Write a brief, plain-language note that the tool needs more data here, and keep the subsection in place.)"
+_GAP_MARKER = "(No relevant information was found in the available sources for this point. Write a brief, plain-language note that the tool needs more data here, naming the specific information or research that would fill the gap so the reader knows what to go and find, and keep the subsection in place.)"
 
 
 def _format_memo_block(memos_by_key: dict, key: str, fallback_label: str, gap_marker: str = _GAP_MARKER) -> str:
@@ -964,7 +976,7 @@ class ChallengesContent(BaseModel):
 class TeamContent(BaseModel):
     capacity: str = Field(default="", description="Body for the Team Capacity subsection. No heading.")
     track_record: str = Field(default="", description="Body for the Track Record and Achievements subsection. No heading.")
-    existing_players: str = Field(default="", description="Body for the Existing Players Doing Similar Work subsection. No heading.")
+    existing_players: str = Field(default="", description="Body for the Existing Players Doing Similar Work subsection: a markdown bullet list, one bullet per player, each starting with the player's name in bold. No heading.")
 
 
 def _render_subsections(pairs: list[tuple[str, str]]) -> str:
@@ -1101,7 +1113,7 @@ Provide the BODY TEXT for four subsections, anchored in their matching research 
 - safety — safety considerations for people carrying out this work.
 - charity_attitudes — cultural attitudes towards foreign and local charities.
 
-Do NOT include any markdown headings in your fields — the headings are added automatically. For any subsection whose memo indicates nothing relevant was found (for example, the specific laws or licensing rules a nonprofit must follow are not covered), write one short, plain-language note that the tool needs more data on that point.
+Do NOT include any markdown headings in your fields — the headings are added automatically. For any subsection whose memo indicates nothing relevant was found (for example, the specific laws or licensing rules a nonprofit must follow are not covered), write one short, plain-language note that the tool needs more data on that point, naming the specific information that would fill the gap (e.g. which law, licensing requirement, ministry position or incident record needs checking).
 
 {base_rules}
 
@@ -1152,7 +1164,7 @@ STRUCTURE THE ANALYSIS PER INTERVENTION:
 5. For every assessment, state your CONFIDENCE (high / moderate / low) given the evidence used, with one sentence on what that evidence does and doesn't establish.
 
 MAKE REASONED INFERENCES — especially for industry_government_cooperation:
-Direct evidence of whether government or industry would cooperate with a specific charity is rare. Where the memos lack a direct statement, INFER from what they do contain — government schemes and priorities in adjacent areas, ministry activity, documented collaborations, industry positions, the political climate, and attitudes towards charities. State the inference plainly ("state fisheries departments would likely engage because…", "large producers would probably resist because…"), tie it to the cited evidence it rests on, and set the confidence level accordingly — an inference from indirect evidence is usually moderate or low confidence, and that must be said. Do NOT default to writing that more data is needed when the memos contain material an inference can rest on; reserve that phrasing for dimensions where the memos genuinely offer nothing to reason from, and there keep the dimension in place with a short, plain-language note that the tool needs more data, marked low confidence.
+Direct evidence of whether government or industry would cooperate with a specific charity is rare. Where the memos lack a direct statement, INFER from what they do contain — government schemes and priorities in adjacent areas, ministry activity, documented collaborations, industry positions, the political climate, and attitudes towards charities. State the inference plainly ("state fisheries departments would likely engage because…", "large producers would probably resist because…"), tie it to the cited evidence it rests on, and set the confidence level accordingly — an inference from indirect evidence is usually moderate or low confidence, and that must be said. Do NOT default to writing that more data is needed when the memos contain material an inference can rest on; reserve that phrasing for dimensions where the memos genuinely offer nothing to reason from, and there keep the dimension in place with a short, plain-language note — marked low confidence — that the tool needs more data, naming the specific data that would fill the gap (e.g. a public-attitudes survey for this audience, a feasibility assessment of the method in India, the relevant ministry's or industry body's stated position).
 
 The supplementary context memos below exist to support such inferences (the political environment and attitudes towards charities often signal how cooperative official bodies would be). Draw on them where they bear on a dimension, with citations, but do not restate them wholesale — they are covered in their own report section.
 
@@ -1171,7 +1183,7 @@ Supplementary context memos (for inference support only):
 
 # Path-analysis-specific gap marker: the writer must try to infer from the other
 # provided memos before falling back to the "more data needed" note.
-_PATH_GAP_MARKER = "(No relevant information was found in the available sources for this dimension. If the OTHER memos provided offer material to reason from, make a clearly-flagged inference from them with an honest — usually low — confidence level; otherwise write a brief, plain-language note that the tool needs more data here. Keep the dimension in place either way.)"
+_PATH_GAP_MARKER = "(No relevant information was found in the available sources for this dimension. If the OTHER memos provided offer material to reason from, make a clearly-flagged inference from them with an honest — usually low — confidence level; otherwise write a brief, plain-language note that the tool needs more data here, naming the specific information that would fill the gap. Keep the dimension in place either way.)"
 
 
 def _render_path_analysis(interventions: List[InterventionPathAnalysis]) -> str:
@@ -1278,10 +1290,10 @@ def write_path_analysis(state: ResearchGraphState):
 windows_instructions = """You are writing the "Windows of Opportunity" section of a theory-of-change evaluation for an animal-advocacy charity operating in India.
 
 Provide the BODY TEXT for two subsections (no markdown headings — they are added automatically):
-- flagged — summarise the opportunities the charity itself put forward, listed here. If none were provided, say so plainly.
+- flagged — assess the opportunities the charity itself put forward, listed here. Do NOT merely restate them: for EACH flagged opportunity, weigh what its research memo below shows FOR and AGAINST the charity's ability to exploit it — whether the window is real, still open, genuinely time-sensitive, and within reach of a charity like this — citing the evidence each way and stating your confidence. Where the memo is silent on a flagged opportunity, restate the opportunity, say plainly that the evidence doesn't yet speak to it, and name the specific information that would settle it (e.g. the policy timetable to check, the market figure to obtain, the stakeholder whose position needs confirming). If the charity provided no opportunities, say so plainly.
   Charity-flagged opportunities:
   {flagged}
-- unspotted — using the research memo below, identify time-sensitive openings the charity likely hasn't spotted: concrete levers an advocate could act on (a policy moment, a producer segment, a coalition, an attention spike). Be concrete about WHY each is time-sensitive. Ground each in the evidence; where the evidence shows no time-sensitive opening, say so rather than inventing urgency. If the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data.
+- unspotted — using its research memo below, identify time-sensitive openings the charity likely hasn't spotted: concrete levers an advocate could act on (a policy moment, a producer segment, a coalition, an attention spike). Be concrete about WHY each is time-sensitive. Ground each in the evidence; where the evidence shows no time-sensitive opening, say so rather than inventing urgency. If the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data and name what kind of information would reveal such openings.
 
 [INTERNAL GUIDANCE — DO NOT name, quote, or reference this in your output. Let these field-experience lessons shape what you treat as a real, actionable opportunity:
 {field_lessons}]
@@ -1290,20 +1302,29 @@ Provide the BODY TEXT for two subsections (no markdown headings — they are add
 
 {citation_rules}
 
-Research memo (for unspotted opportunities):
-{memo}"""
+Research memos:
+{memos}"""
 
 
 def write_windows(state: ResearchGraphState):
     ps = state.get("path_spec") or {}
     memos_by_key = state.get("memos_by_key") or {}
-    memo_block = _format_memo_block(memos_by_key, "windows_unspotted", "Opportunities the charity may not have spotted")
+    flagged_opps = [o for o in (ps.get("charity_flagged_opportunities") or []) if str(o).strip()]
+    blocks = []
+    if flagged_opps:
+        blocks.append(_format_memo_block(memos_by_key, "windows_flagged", "Evidence on the charity's flagged opportunities"))
+    else:
+        blocks.append(
+            "### Evidence on the charity's flagged opportunities\n"
+            "(The charity flagged no opportunities, so no evidence was gathered for this point.)"
+        )
+    blocks.append(_format_memo_block(memos_by_key, "windows_unspotted", "Opportunities the charity may not have spotted"))
     system_message = windows_instructions.format(
-        flagged=_bullet_list(ps.get("charity_flagged_opportunities")),
+        flagged=_bullet_list(flagged_opps),
         field_lessons=FIELD_LESSONS,
         base_rules=WRITER_BASE_RULES,
         citation_rules=GLOBAL_CITATION_RULES,
-        memo=memo_block,
+        memos="\n\n".join(blocks),
     )
     res = cast(WindowsContent, llm.with_structured_output(WindowsContent).invoke(
         [SystemMessage(content=system_message), HumanMessage(content="Write the two subsection bodies.")]
@@ -1320,11 +1341,11 @@ The charity's proposed path:
 {path_brief}
 
 Provide the BODY TEXT for three subsections (no markdown headings — they are added automatically):
-- effectiveness — Check the charity's stated actions against the evidence. Go ACTION BY ACTION: for each action, state whether the data BACKS IT UP or OBSTRUCTS its effectiveness, and cite every claim. Do NOT open with a general summary paragraph. Favour MULTIPLE corroborating citations where the data contains them. Where the data is silent on an action, write a short, plain-language note that the tool needs more data — do NOT fall back on uncited general knowledge.
+- effectiveness — Check the charity's stated actions against the evidence. Go ACTION BY ACTION: for each action, state whether the data BACKS IT UP or OBSTRUCTS its effectiveness, and cite every claim. Do NOT open with a general summary paragraph. Favour MULTIPLE corroborating citations where the data contains them. Where the data is silent on an action, write a short, plain-language note that the tool needs more data, naming the evidence that would settle it (e.g. evaluations of this action in comparable settings, uptake or compliance figures, campaign outcome records) — do NOT fall back on uncited general knowledge.
 - cultural — cultural challenges that could obstruct the path, from its memo.
 - landscape — challenges in the animal-advocacy landscape, from its memo.
 
-For cultural and landscape, where a memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data on that point.
+For cultural and landscape, where a memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data on that point, specifying what information would fill the gap (e.g. which communities' or audiences' attitudes, which organisations' capacity or positions, need researching).
 
 [INTERNAL GUIDANCE — DO NOT name, quote, or reference this in your output. Let these field-experience lessons sharpen which challenges genuinely matter:
 {field_lessons}]
@@ -1368,11 +1389,13 @@ Provide the BODY TEXT for three subsections (no markdown headings — they are a
 - track_record — the team's track record and achievements, using ONLY the team information provided below.
 - existing_players — using the research memo below, organisations, coalitions, government bodies or individuals already doing similar work in India and what the evidence says they are doing.
 
-For capacity and track_record: if little or nothing was provided, state plainly that the tool needs more data on the team (this information isn't yet available to the tool). Do not invent team details.
+For capacity and track_record: if little or nothing was provided, state plainly that the tool needs more data on the team (this information isn't yet available to the tool) and list the specific team information worth requesting from the charity (e.g. staff numbers and roles, relevant experience, prior campaign results). Do not invent team details.
 Team information from the charity:
 {team_info}
 
-For existing_players: do not treat any player as a fixed obstacle — note where one could be a partner or an alternative ally. If carrying out this path would likely face significant regulatory hurdles, give existing players more weight (as partners or as groups that already navigate those hurdles). Where the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data.
+For existing_players: format the body as a markdown bullet list — one bullet per organisation, coalition, government body or individual, and START each bullet with that player's name in bold, like:
+- **Player Name** — what the evidence says it is doing that is relevant, with citations.
+Do not treat any player as a fixed obstacle — note within its bullet where one could be a partner or an alternative ally. If carrying out this path would likely face significant regulatory hurdles, give existing players more weight (as partners or as groups that already navigate those hurdles). Where the memo indicates nothing relevant was found, write a short, plain-language note that the tool needs more data and name where such players could be found (e.g. which directories, networks or registries to search).
 
 {base_rules}
 
@@ -1451,11 +1474,11 @@ From the files, surface real, named people and organisations who could be worth 
 
 Do not include a top-level section heading; start directly with the experts. For each expert or organisation, use this format:
 ### <Name or Organisation>
-- **Why Selected:** tie back to a specific gap or finding from the evaluation.
+- **Why This Expert was Selected:** tie back to a specific gap or finding from the evaluation.
 - **Questions to Ask:** 2-3 concrete questions.
 - **Contact Details:** any contact details present in the files; if none are available, say plainly that contact details aren't available to the tool yet.
 
-If the files surface no relevant names at all, write a short, plain-language note that the tool needs more data to recommend specific experts.
+If the files surface no relevant names at all, write a short, plain-language note that the tool needs more data to recommend specific experts, naming the kinds of sources that would surface them (e.g. study author lists, ministry directories, advocacy network rosters).
 
 {base_rules}
 
