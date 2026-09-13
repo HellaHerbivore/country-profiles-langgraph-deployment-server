@@ -150,5 +150,6 @@ Populate `.env` (root) and `frontend/web/.env` from the respective
 
 ## 7. Contacts / ownership
 
-**TODO:** fill in who to contact for Render/Neon billing, Clerk config,
-and Gemini File Search store administration.
+Contact Shanil (shanilwijesinghe2@gmail.com) for a secure credentials
+transfer — Render/Neon billing access, Clerk config, and Gemini File
+Search store administration.
