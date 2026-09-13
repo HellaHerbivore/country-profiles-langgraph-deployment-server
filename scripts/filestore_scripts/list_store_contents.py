@@ -20,6 +20,29 @@ STORES = {
     "movement_map": MOVEMENT_MAP_STORE,
 }
 
+# The movement-map store holds one document per organisation (~1,000 total —
+# see scripts/filestore_scripts/movement_map/README.md), so it is reported as
+# a single collapsed item (counts per collection) rather than every org name.
+MOVEMENT_MAP_COLLECTION_PREFIXES = {
+    "ACE Movement Map - ": "ACE Movement Map 2026",
+    "Stray Dog Institute Movement Map - ": "Stray Dog Institute India Partner Directory",
+}
+
+
+def _summarise_movement_map(names: list[str]) -> dict:
+    counts = {label: 0 for label in MOVEMENT_MAP_COLLECTION_PREFIXES.values()}
+    other = 0
+    for name in names:
+        for prefix, label in MOVEMENT_MAP_COLLECTION_PREFIXES.items():
+            if name.startswith(prefix):
+                counts[label] += 1
+                break
+        else:
+            other += 1
+    if other:
+        counts["Other"] = other
+    return {"total_documents": len(names), "by_collection": counts}
+
 
 def main():
     ap = argparse.ArgumentParser(description="List every document's display name in each Gemini File Search store")
@@ -34,8 +57,16 @@ def main():
         for doc in client.file_search_stores.documents.list(parent=store_id):
             names.append(getattr(doc, "display_name", "") or doc.name)
         names.sort()
-        results[key] = names
 
+        if key == "movement_map":
+            summary = _summarise_movement_map(names)
+            results[key] = summary
+            print(f"\n=== {key}  ({store_id}) — {summary['total_documents']} documents (one org profile each) ===")
+            for label, count in summary["by_collection"].items():
+                print(f"  - {label}: {count} organisations")
+            continue
+
+        results[key] = names
         print(f"\n=== {key}  ({store_id}) — {len(names)} documents ===")
         for n in names:
             print(f"  - {n}")
